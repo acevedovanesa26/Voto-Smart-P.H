@@ -29,6 +29,7 @@ interface AuthContextType {
   refreshComplex: () => Promise<void>;
   switchComplex: (complexId: string) => Promise<void>;
   addComplex: (data: Omit<ResidentialComplex, 'id'>) => Promise<void>;
+  updateProfileState: (updatedUser: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -119,6 +120,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await loadComplexes();
   };
 
+  const updateProfileState = (updatedUser: User) => {
+    setUser(updatedUser);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -135,7 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         refreshComplex,
         switchComplex,
-        addComplex
+        addComplex,
+        updateProfileState
       }}
     >
       {children}

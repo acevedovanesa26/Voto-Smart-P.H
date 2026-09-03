@@ -14,6 +14,7 @@ import { AdminDashboard } from './components/dashboard/AdminDashboard';
 import { Footer } from './components/layout/Footer';
 import { Navbar } from './components/layout/Navbar';
 import { OwnersManager } from './components/owners/OwnersManager';
+import { UserProfileModal } from './components/profile/UserProfileModal';
 import { VoterPortal } from './components/voter/VoterPortal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -25,6 +26,7 @@ function MainContent() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [showComplexModal, setShowComplexModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // If user is authenticated, route to appropriate default view if on login screen
   const activeDisplayView = !isAuthenticated ? 'auth_decision' : (currentView === 'auth_decision' ? (role === 'owner' ? 'voter' : 'dashboard') : currentView);
@@ -34,6 +36,7 @@ function MainContent() {
       {/* Top Navigation */}
       <Navbar
         onOpenLogin={() => setShowLoginModal(true)}
+        onOpenProfile={() => setShowProfileModal(true)}
         onNavigateHome={() => setCurrentView(isAuthenticated ? (role === 'owner' ? 'voter' : 'dashboard') : 'auth_decision')}
         onOpenComplexSwitcher={() => setShowComplexModal(true)}
         currentView={activeDisplayView}
@@ -42,8 +45,8 @@ function MainContent() {
         onSelectView={(view) => setCurrentView(view as any)}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {/* Main Content Area - Responsive padding for mobile and desktop */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* 1. Login / Access Decision View */}
         {activeDisplayView === 'auth_decision' && (
           <RoleDecisionView
@@ -131,6 +134,11 @@ function MainContent() {
       <ComplexSwitcherModal
         isOpen={showComplexModal}
         onClose={() => setShowComplexModal(false)}
+      />
+
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
       />
     </div>
   );

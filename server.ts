@@ -213,10 +213,12 @@ app.post('/api/auth/voter-request-otp', async (req, res) => {
       html: emailHtml
     });
 
+    // Sanitize result so code is not exposed to the client
+    const { code, otpCode: _discardOtp, verificationCode: _discardVerif, ...safeResult } = result as any;
+
     res.json({
-      ...result,
-      deliveryMode: dispatchRes.deliveryMode,
-      otpCode
+      ...safeResult,
+      deliveryMode: dispatchRes.deliveryMode
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -230,6 +232,37 @@ app.post('/api/auth/voter-verify-otp', (req, res) => {
       return res.status(400).json({ error: 'Cédula y código son requeridos' });
     }
     const result = store.verifyVoterOtp(documentNumber, code);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Profile Management (Update Info & Change Password)
+app.put('/api/auth/profile', (req, res) => {
+  try {
+    const { userId, ...updateData } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'ID de usuario es requerido para actualizar el perfil.' });
+    }
+    const updated = store.updateUserProfile(userId, updateData);
+    res.json({
+      success: true,
+      user: updated,
+      message: 'Información de perfil actualizada correctamente.'
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/change-password', (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Usuario, contraseña actual y nueva contraseña son requeridos.' });
+    }
+    const result = store.changeUserPassword(userId, currentPassword, newPassword);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -415,6 +448,31 @@ app.post('/api/owners/batch', (req, res) => {
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/owners/:id', (req, res) => {
+  try {
+    const success = store.deleteOwner(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: 'Propietario no encontrado' });
+    }
+    res.json({ success: true, message: 'Propietario eliminado correctamente' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/owners/delete-batch', (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Debe especificar al menos un ID de propietario para eliminar.' });
+    }
+    const result = store.deleteOwnersBatch(ids);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

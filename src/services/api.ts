@@ -94,6 +94,32 @@ export const api = {
     return res.json();
   },
 
+  async updateProfile(userId: string, data: Partial<User>): Promise<{ success: boolean; user: User; message: string }> {
+    const res = await fetch(`${API_BASE}/auth/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, ...data })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al actualizar información del perfil');
+    }
+    return res.json();
+  },
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, currentPassword, newPassword })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al cambiar contraseña');
+    }
+    return res.json();
+  },
+
   // Voter OTP (Cédula + Código al Correo)
   async requestVoterOtp(documentNumber: string): Promise<{
     success: boolean;
@@ -105,6 +131,9 @@ export const api = {
     building: string;
     coefficient: number;
     verificationCode?: string;
+    otpCode?: string;
+    code?: string;
+    deliveryMode?: 'real_smtp' | 'sandbox_inbox';
     message: string;
   }> {
     const res = await fetch(`${API_BASE}/auth/voter-request-otp`, {
@@ -215,6 +244,30 @@ export const api = {
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error || 'Error al importar propietarios');
+    }
+    return res.json();
+  },
+
+  async deleteOwner(id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/owners/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al eliminar propietario');
+    }
+    return true;
+  },
+
+  async deleteOwnersBatch(ids: string[]): Promise<{ success: boolean; deletedCount: number; total: number }> {
+    const res = await fetch(`${API_BASE}/owners/delete-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al eliminar los propietarios seleccionados');
     }
     return res.json();
   },

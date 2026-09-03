@@ -49,7 +49,7 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2 text-slate-400">
               <li>Línea Directa: (+57) 601 745 8900</li>
               <li>WhatsApp Soporte: +57 310 987 6543</li>
-              <li>Email: soporte@votosmart.app</li>
+              <li>Email: soporte@asambleas.com</li>
               <li>Disponibilidad 24/7 en Asambleas</li>
             </ul>
           </div>

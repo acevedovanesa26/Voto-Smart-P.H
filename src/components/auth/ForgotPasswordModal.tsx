@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, KeyRound, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api } from '../../services/api';
 import { Alert, Button, Modal } from '../common/UIComponents';
 
@@ -19,6 +19,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +112,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ejemplo: admin@votosmart.app o carlos.ruiz@gmail.com"
+                  placeholder="ej: usuario@ejemplo.com o tu_correo@gmail.com"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-sm font-medium text-slate-900 bg-white"
                 />
               </div>
@@ -168,27 +170,47 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Nueva Contraseña
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm"
-                />
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                    title={showNewPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Confirmar Contraseña
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                    title={showConfirmPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 

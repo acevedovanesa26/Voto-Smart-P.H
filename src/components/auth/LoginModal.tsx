@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Eye,
+  EyeOff,
   KeyRound,
   Mail,
   RefreshCw,
@@ -39,6 +41,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // Admin credentials
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
 
   // Voter OTP credentials (Cedula -> Code from email)
   const [voterCedula, setVoterCedula] = useState('');
@@ -77,9 +80,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   // Voter step 1: Request OTP with Cedula
-  const handleRequestOtp = async (e?: React.FormEvent) => {
+  const handleRequestOtp = async (cedulaToUse?: string, e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!voterCedula.trim()) {
+    const doc = (cedulaToUse || voterCedula).trim();
+    if (!doc) {
       setError('Por favor ingrese su número de cédula o documento de identidad.');
       return;
     }
@@ -87,12 +91,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setError(null);
     setSuccessMessage(null);
     try {
-      const res = await api.requestVoterOtp(voterCedula.trim());
+      const res = await api.requestVoterOtp(doc);
       setMaskedEmail(res.maskedEmail);
       setVoterName(res.name);
       setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
+      setOtpCode(''); // No mostrar ni autollenar
       setOtpStep('verify');
-      setSuccessMessage(`Hemos enviado un código de 6 dígitos a su correo ${res.maskedEmail}. Revisa tu bandeja de entrada o spam.`);
+      setSuccessMessage(`Código enviado exitosamente a ${res.maskedEmail}. Revise su bandeja de entrada o spam.`);
     } catch (err: any) {
       setError(err.message || 'No se encontró la cédula en el censo del conjunto.');
     } finally {
@@ -103,14 +108,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // Voter step 2: Verify OTP
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode.trim() || otpCode.trim().length < 4) {
+    const codeToVerify = otpCode.trim();
+    if (!codeToVerify || codeToVerify.length < 4) {
       setError('Por favor ingrese el código de 6 dígitos que recibió en su correo.');
       return;
     }
     setIsLoading(true);
     setError(null);
     try {
-      await loginVoterWithOtp(voterCedula.trim(), otpCode.trim());
+      await loginVoterWithOtp(voterCedula.trim(), codeToVerify);
       onClose();
       if (onSuccessLogin) onSuccessLogin('owner');
     } catch (err: any) {
@@ -167,14 +173,33 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           </button>
         </div>
 
-        {error && <Alert type="error">{error}</Alert>}
+        {error && (
+          <div className="space-y-2">
+            <Alert type="error">{error}</Alert>
+            {activeTab === 'voter' && onOpenRegister && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
+                <span className="text-[11px]">¿No estás registrado en el censo?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenRegister();
+                  }}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] whitespace-nowrap shadow-xs"
+                >
+                  Registrarme al Censo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {successMessage && <Alert type="success">{successMessage}</Alert>}
 
         {/* TAB 1: VOTER / OWNER ACCESS BY CÉDULA + EMAIL CODE */}
         {activeTab === 'voter' && (
           <div className="space-y-4">
             {otpStep === 'request' ? (
-              <form onSubmit={handleRequestOtp} className="space-y-3.5">
+              <form onSubmit={(e) => handleRequestOtp(undefined, e)} className="space-y-3.5">
                 <div className="p-3 bg-teal-50/70 rounded-xl border border-teal-200/80 text-teal-900">
                   <p className="font-semibold text-xs flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
@@ -199,6 +224,45 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       placeholder="Ej: 79845612 o 52987123"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
                     />
+                  </div>
+                </div>
+
+                {/* Quick Demo ID selector */}
+                <div className="pt-1 pb-1">
+                  <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">
+                    Cédulas registradas de prueba (haz clic para probar):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('79.845.612');
+                        handleRequestOtp('79.845.612');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      79.845.612 (Apto 302)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('41.905.432');
+                        handleRequestOtp('41.905.432');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      41.905.432 (Apto 101)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('19.876.543');
+                        handleRequestOtp('19.876.543');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      19.876.543 (Apto 501)
+                    </button>
                   </div>
                 </div>
 
@@ -235,12 +299,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       maxLength={6}
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123456"
+                      placeholder="Ej: 849201"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold"
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Revise su bandeja de entrada o spam para copiar el código recibido.
+                    Revise su bandeja de entrada o spam en <strong>{maskedEmail}</strong> e ingrese el código de 6 dígitos.
                   </p>
                 </div>
 
@@ -282,7 +346,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   required
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="admin@votosmart.app"
+                  placeholder="administracion@torresdelparque.com"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
                 />
               </div>
@@ -307,13 +371,27 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="password"
+                  id="modal-admin-password"
+                  type={showAdminPassword ? "text" : "password"}
                   required
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
+                  className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 transition-colors"
+                  aria-label={showAdminPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  title={showAdminPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                >
+                  {showAdminPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
 

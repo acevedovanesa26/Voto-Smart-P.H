@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, CheckCircle2, KeyRound, Mail, Phone, Shield, ShieldCheck, User as UserIcon, Users } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, EyeOff, KeyRound, Mail, Phone, Shield, ShieldCheck, User as UserIcon, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, Button, Modal } from '../common/UIComponents';
 
@@ -21,6 +21,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
   const [coefficient, setCoefficient] = useState('5.0');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,13 +234,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   placeholder="Mínimo 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+                  className="w-full pl-9 pr-9 py-2 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                  title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -247,13 +257,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
-                  type="password"
+                  type={showConfirmPassword ? "text" : "password"}
                   required
                   placeholder="Repite la contraseña"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+                  className="w-full pl-9 pr-9 py-2 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                  title={showConfirmPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
           </div>

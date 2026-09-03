@@ -33,14 +33,16 @@ function getTransporter() {
   const port = (process.env.EMAIL_PORT || process.env.SMTP_PORT) ? parseInt(process.env.EMAIL_PORT || process.env.SMTP_PORT || '587', 10) : 587;
   const user = process.env.EMAIL_USERNAME || process.env.SMTP_USER || process.env.GMAIL_USER;
   const pass = process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || process.env.GMAIL_PASS;
-  const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'VotoSmart Colombia <notificaciones@votosmart.app>';
 
   if (host && user && pass) {
     return nodemailer.createTransport({
       host,
       port,
       secure: port === 465,
-      auth: { user, pass }
+      auth: { user, pass },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
   }
 
@@ -67,7 +69,8 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
   const id = `mail-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const timestamp = new Date().toISOString();
   const transporter = getTransporter();
-  const fromAddress = process.env.SMTP_FROM || 'VotoSmart Colombia <notificaciones@votosmart.app>';
+  const smtpUser = process.env.EMAIL_USERNAME || process.env.SMTP_USER || process.env.GMAIL_USER;
+  const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || (smtpUser ? `VotoSmart <${smtpUser}>` : 'VotoSmart Asambleas <notificaciones@asambleas.com>');
 
   let deliveryMode: 'real_smtp' | 'sandbox_inbox' = 'sandbox_inbox';
   let messageId = id;

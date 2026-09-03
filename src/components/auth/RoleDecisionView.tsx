@@ -4,6 +4,8 @@ import {
   Building2,
   CheckCircle2,
   ChevronRight,
+  Eye,
+  EyeOff,
   KeyRound,
   Mail,
   RefreshCw,
@@ -39,6 +41,7 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   // Admin form state
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
 
   // Voter OTP state (Cédula -> Código enviado al Correo)
   const [voterCedula, setVoterCedula] = useState('');
@@ -79,9 +82,10 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   };
 
   // Voter Request OTP
-  const handleRequestOtp = async (e?: React.FormEvent) => {
+  const handleRequestOtp = async (cedulaToUse?: string, e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!voterCedula.trim()) {
+    const doc = (cedulaToUse || voterCedula).trim();
+    if (!doc) {
       setErrorVoter('Por favor ingrese su número de cédula o documento de identidad.');
       return;
     }
@@ -89,13 +93,14 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
     setErrorVoter(null);
     setSuccessVoter(null);
     try {
-      const res = await api.requestVoterOtp(voterCedula.trim());
+      const res = await api.requestVoterOtp(doc);
       setMaskedEmail(res.maskedEmail);
       setVoterName(res.name);
       setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
+      setOtpCode(''); // No mostrar ni prellenar: el usuario debe revisarlo en su correo
       setOtpStep('verify');
-      setSuccessVoter(`Código de 6 dígitos enviado exitosamente a tu correo registrado (${res.maskedEmail}). Revisa tu bandeja de entrada o buzón.`);
-      setResendCooldown(45);
+      setSuccessVoter(`Hemos enviado su código de seguridad de 6 dígitos al correo electrónico ${res.maskedEmail}. Por favor revise su bandeja de entrada o carpeta de spam.`);
+      setResendCooldown(30);
       const timer = setInterval(() => {
         setResendCooldown((prev) => {
           if (prev <= 1) {
@@ -115,14 +120,15 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   // Voter Verify OTP
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode.trim() || otpCode.trim().length < 4) {
+    const codeToVerify = otpCode.trim();
+    if (!codeToVerify || codeToVerify.length < 4) {
       setErrorVoter('Por favor ingrese el código de 6 dígitos que recibió en su correo.');
       return;
     }
     setIsLoadingVoter(true);
     setErrorVoter(null);
     try {
-      await loginVoterWithOtp(voterCedula.trim(), otpCode.trim());
+      await loginVoterWithOtp(voterCedula.trim(), codeToVerify);
       onEnterVoter();
     } catch (err: any) {
       setErrorVoter(err.message || 'Código de verificación incorrecto o expirado.');
@@ -160,9 +166,9 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
       </div>
 
       {/* Dual Access Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
         {/* CARD 1: VOTER ACCESS (CÉDULA + CÓDIGO) */}
-        <Card className="p-6 sm:p-8 flex flex-col justify-between border-2 border-teal-500 shadow-lg shadow-teal-500/5 bg-white">
+        <Card className="p-4 sm:p-8 flex flex-col justify-between border-2 border-teal-500 shadow-lg shadow-teal-500/5 bg-white">
           <div className="space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shadow-xs">
               <Vote className="w-7 h-7" />
@@ -180,12 +186,26 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
               </p>
             </div>
 
-            {errorVoter && <Alert type="error">{errorVoter}</Alert>}
+            {errorVoter && (
+              <div className="space-y-2">
+                <Alert type="error">{errorVoter}</Alert>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
+                  <span className="text-[11px] leading-tight">¿Tu cédula no aparece en el censo aún?</span>
+                  <button
+                    type="button"
+                    onClick={onOpenRegister}
+                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] whitespace-nowrap shadow-xs"
+                  >
+                    Registrarme al Censo
+                  </button>
+                </div>
+              </div>
+            )}
             {successVoter && <Alert type="success">{successVoter}</Alert>}
 
             {/* Step 1: Document Request */}
             {otpStep === 'request' ? (
-              <form onSubmit={handleRequestOtp} className="space-y-3.5 pt-2 text-xs">
+              <form onSubmit={(e) => handleRequestOtp(undefined, e)} className="space-y-3.5 pt-2 text-xs">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase mb-1">
                     Número de Cédula / Documento de Identidad
@@ -200,6 +220,45 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                       placeholder="Ej: 79845612 o 52987123"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
                     />
+                  </div>
+                </div>
+
+                {/* Quick Demo ID selector */}
+                <div className="pt-1 pb-1">
+                  <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">
+                    Cédulas registradas de prueba (haz clic para probar):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('79.845.612');
+                        handleRequestOtp('79.845.612');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      79.845.612 (Apto 302)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('41.905.432');
+                        handleRequestOtp('41.905.432');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      41.905.432 (Apto 101)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('19.876.543');
+                        handleRequestOtp('19.876.543');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      19.876.543 (Apto 501)
+                    </button>
                   </div>
                 </div>
 
@@ -222,7 +281,7 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                     {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
                   </div>
                   <p className="text-[11px] text-slate-600">
-                    Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
+                    Código enviado al correo registrado: <strong className="text-teal-700">{maskedEmail}</strong>
                   </p>
                 </div>
 
@@ -249,12 +308,12 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                       maxLength={6}
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123456"
+                      placeholder="Ej: 849201"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    Revise la bandeja de entrada o buzón de correo ({maskedEmail}).
+                    Revise su bandeja de entrada o carpeta de correo no deseado (spam) en <strong>{maskedEmail}</strong> e introduzca el código de seguridad recibido.
                   </p>
                 </div>
 
@@ -314,7 +373,7 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                     required
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="admin@votosmart.app"
+                    placeholder="administracion@torresdelparque.com"
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
                   />
                 </div>
@@ -334,13 +393,27 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    id="admin-password-input"
+                    type={showAdminPassword ? "text" : "password"}
                     required
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
+                    className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 transition-colors"
+                    aria-label={showAdminPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                    title={showAdminPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  >
+                    {showAdminPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 
