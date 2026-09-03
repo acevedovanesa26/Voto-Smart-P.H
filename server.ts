@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
 import { dispatchEmail, getEmailHistory, getLatestEmailFor } from './server/emailService';
+import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
 const PORT = 3000;
@@ -34,6 +35,20 @@ function getGeminiClient() {
 // 1. Health
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'VotoSmart API', timestamp: new Date().toISOString() });
+});
+
+// Database Status & Manual Sync
+app.get('/api/db/status', (req, res) => {
+  res.json(getDbStatus());
+});
+
+app.post('/api/db/sync', async (req, res) => {
+  try {
+    const success = await saveStateNow();
+    res.json({ success, message: success ? 'Estado sincronizado con PostgreSQL' : 'Modo memoria (sin DATABASE_URL activa)' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 2. Auth
@@ -718,6 +733,11 @@ Requisitos estrictos:
 // ----------------------------------------------------
 
 async function startServer() {
+  // Initialize Database connection (PostgreSQL if DATABASE_URL is set, otherwise In-Memory fallback)
+  await initDb().catch((err) => {
+    console.error('Error in initDb:', err);
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

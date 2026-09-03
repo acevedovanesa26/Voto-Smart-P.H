@@ -1142,6 +1142,7 @@ class DataStore {
       ipAddress: '190.25.112.44'
     };
     this.auditLogs.unshift(log);
+    this.notifyChange();
     return log;
   }
 
@@ -1160,7 +1161,98 @@ class DataStore {
     this.minutes = [{ ...DEMO_MINUTES }];
     this.auditLogs = [...DEMO_AUDIT_LOGS];
     this.emailLogs = [...DEMO_EMAIL_LOGS];
+    this.notifyChange();
     return true;
+  }
+
+  // State Snapshot & PostgreSQL Persistence
+  private onChangeCallback: (() => void) | null = null;
+
+  setOnChange(callback: () => void) {
+    this.onChangeCallback = callback;
+  }
+
+  notifyChange() {
+    if (this.onChangeCallback) {
+      try {
+        this.onChangeCallback();
+      } catch (err) {
+        console.error('[Store] Error in onChange callback:', err);
+      }
+    }
+  }
+
+  getSnapshot() {
+    return {
+      complexes: this.complexes,
+      complex: this.complex,
+      users: this.users,
+      owners: this.owners,
+      assemblies: this.assemblies,
+      quorum: this.quorum,
+      documents: this.documents,
+      votes: this.votes,
+      voteRecords: this.voteRecords,
+      participations: this.participations,
+      notes: this.notes,
+      minutes: this.minutes,
+      auditLogs: this.auditLogs,
+      emailLogs: this.emailLogs,
+      userPasswords: Array.from(this.userPasswords.entries())
+    };
+  }
+
+  loadSnapshot(snapshot: any) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    try {
+      if (Array.isArray(snapshot.complexes) && snapshot.complexes.length > 0) {
+        this.complexes = snapshot.complexes;
+      }
+      if (snapshot.complex && snapshot.complex.id) {
+        this.complex = snapshot.complex;
+      }
+      if (Array.isArray(snapshot.users) && snapshot.users.length > 0) {
+        this.users = snapshot.users;
+      }
+      if (Array.isArray(snapshot.owners) && snapshot.owners.length > 0) {
+        this.owners = snapshot.owners;
+      }
+      if (Array.isArray(snapshot.assemblies) && snapshot.assemblies.length > 0) {
+        this.assemblies = snapshot.assemblies;
+      }
+      if (Array.isArray(snapshot.quorum)) {
+        this.quorum = snapshot.quorum;
+      }
+      if (Array.isArray(snapshot.documents)) {
+        this.documents = snapshot.documents;
+      }
+      if (Array.isArray(snapshot.votes)) {
+        this.votes = snapshot.votes;
+      }
+      if (Array.isArray(snapshot.voteRecords)) {
+        this.voteRecords = snapshot.voteRecords;
+      }
+      if (Array.isArray(snapshot.participations)) {
+        this.participations = snapshot.participations;
+      }
+      if (Array.isArray(snapshot.notes)) {
+        this.notes = snapshot.notes;
+      }
+      if (Array.isArray(snapshot.minutes)) {
+        this.minutes = snapshot.minutes;
+      }
+      if (Array.isArray(snapshot.auditLogs)) {
+        this.auditLogs = snapshot.auditLogs;
+      }
+      if (Array.isArray(snapshot.emailLogs)) {
+        this.emailLogs = snapshot.emailLogs;
+      }
+      if (Array.isArray(snapshot.userPasswords)) {
+        this.userPasswords = new Map(snapshot.userPasswords);
+      }
+    } catch (err) {
+      console.error('[Store] Error restoring snapshot from database:', err);
+    }
   }
 }
 

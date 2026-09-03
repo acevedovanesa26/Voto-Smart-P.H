@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Database,
   Edit3,
   FileCheck2,
   FileText,
@@ -49,19 +50,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showComplexModal, setShowComplexModal] = useState(false);
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; type: string; error?: string | null } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [asmList, ownList, aLogs] = await Promise.all([
+      const [asmList, ownList, aLogs, dStatus] = await Promise.all([
         api.getAssemblies(),
         api.getOwners(),
-        api.getAuditLogs()
+        api.getAuditLogs(),
+        api.getDbStatus().catch(() => null)
       ]);
       setAssemblies(asmList);
       setOwners(ownList);
       setAuditLogs(aLogs);
+      if (dStatus) setDbStatus(dStatus);
     } catch (err) {
       console.error(err);
     } finally {
@@ -92,6 +96,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span className="text-[11px] text-slate-400">
                 NIT: {complex?.nit || '901.458.789-2'}
               </span>
+              {dbStatus && (
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border ${
+                    dbStatus.connected
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-white/10 text-slate-300 border-white/15'
+                  }`}
+                  title={
+                    dbStatus.connected
+                      ? 'Base de datos PostgreSQL conectada y sincronizada.'
+                      : 'Modo memoria activo. Configura DATABASE_URL en Render para activar PostgreSQL.'
+                  }
+                >
+                  <Database className={`w-3.5 h-3.5 ${dbStatus.connected ? 'text-emerald-400' : 'text-teal-400'}`} />
+                  {dbStatus.connected ? 'PostgreSQL Conectado' : 'Almacenamiento Local'}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-3">

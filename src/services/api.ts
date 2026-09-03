@@ -543,6 +543,23 @@ export const api = {
     await fetch(`${API_BASE}/demo/reset`, { method: 'POST' });
   },
 
+  // Database & Persistence
+  async getDbStatus(): Promise<{
+    connected: boolean;
+    type: string;
+    error: string | null;
+    databaseUrlSet: boolean;
+    timestamp: string;
+  }> {
+    const res = await fetch(`${API_BASE}/db/status`);
+    return res.json();
+  },
+
+  async syncDb(): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/db/sync`, { method: 'POST' });
+    return res.json();
+  },
+
   // Gemini AI Summarization
   async generateAiSummary(payload: {
     assemblyTitle: string;
