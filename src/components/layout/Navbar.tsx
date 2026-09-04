@@ -4,6 +4,7 @@ import {
   ChevronDown,
   KeyRound,
   LogOut,
+  Mail,
   Menu,
   ShieldCheck,
   Type,

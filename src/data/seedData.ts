@@ -168,10 +168,39 @@ export const DEMO_USERS: User[] = [
     status: 'active',
     complexId: 'complex-1',
     createdAt: '2026-01-20T10:00:00Z'
+  },
+  {
+    id: 'user-owner-vanesa',
+    name: 'Vanesa Motato',
+    email: 'motatovanesa@gmail.com',
+    role: 'owner',
+    phone: '+57 310 123 4567',
+    documentType: 'CC',
+    documentNumber: '1.098.765.432',
+    apartment: 'Apto 401',
+    building: 'Torre A',
+    coefficient: 8.50,
+    status: 'active',
+    complexId: 'complex-1',
+    createdAt: '2026-01-20T10:00:00Z'
   }
 ];
 
 export const DEMO_OWNERS: Owner[] = [
+  {
+    id: 'owner-vanesa',
+    complexId: 'complex-1',
+    name: 'Vanesa Motato',
+    documentType: 'CC',
+    documentNumber: '1.098.765.432',
+    email: 'motatovanesa@gmail.com',
+    phone: '+57 310 123 4567',
+    building: 'Torre A',
+    apartment: 'Apto 401',
+    coefficient: 8.5000,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
   {
     id: 'owner-1',
     complexId: 'complex-1',

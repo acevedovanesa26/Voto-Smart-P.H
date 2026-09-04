@@ -3,7 +3,7 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
-import { dispatchEmail, getEmailHistory, getLatestEmailFor } from './server/emailService';
+import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
@@ -132,9 +132,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     });
 
     res.json({
-      ...result,
-      deliveryMode: dispatchRes.deliveryMode,
-      verificationCode: result.code // provided for easy validation/preview if needed
+      success: true,
+      email: result.email,
+      maskedEmail: result.maskedEmail,
+      userName: result.userName,
+      message: `Hemos enviado un código de seguridad de 6 dígitos a su correo (${result.maskedEmail}). Por favor revise su bandeja de entrada o spam.`,
+      deliveryMode: dispatchRes.deliveryMode
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -170,7 +173,7 @@ app.post('/api/auth/reset-password', (req, res) => {
 // Voter OTP Flow (Cédula + Código al Correo)
 app.post('/api/auth/voter-request-otp', async (req, res) => {
   try {
-    const { documentNumber } = req.body;
+    const documentNumber = req.body.documentNumber || req.body.documentId || req.body.cedula;
     if (!documentNumber) {
       return res.status(400).json({ error: 'El número de cédula o documento es requerido' });
     }
@@ -213,11 +216,16 @@ app.post('/api/auth/voter-request-otp', async (req, res) => {
       html: emailHtml
     });
 
-    // Sanitize result so code is not exposed to the client
-    const { code, otpCode: _discardOtp, verificationCode: _discardVerif, ...safeResult } = result as any;
-
     res.json({
-      ...safeResult,
+      success: true,
+      email: result.email,
+      maskedEmail: result.maskedEmail,
+      name: result.name,
+      documentNumber: result.documentNumber,
+      apartment: result.apartment,
+      building: result.building,
+      coefficient: result.coefficient,
+      message: `Código enviado exitosamente a ${result.maskedEmail}. Por favor revise su bandeja de entrada o spam.`,
       deliveryMode: dispatchRes.deliveryMode
     });
   } catch (error: any) {
@@ -225,9 +233,10 @@ app.post('/api/auth/voter-request-otp', async (req, res) => {
   }
 });
 
-app.post('/api/auth/voter-verify-otp', (req, res) => {
+const handleVoterVerify = (req: any, res: any) => {
   try {
-    const { documentNumber, code } = req.body;
+    const documentNumber = req.body.documentNumber || req.body.documentId || req.body.cedula;
+    const code = req.body.code || req.body.otpCode;
     if (!documentNumber || !code) {
       return res.status(400).json({ error: 'Cédula y código son requeridos' });
     }
@@ -236,7 +245,10 @@ app.post('/api/auth/voter-verify-otp', (req, res) => {
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
-});
+};
+
+app.post('/api/auth/voter-verify-otp', handleVoterVerify);
+app.post('/api/auth/voter-login-otp', handleVoterVerify);
 
 // Profile Management (Update Info & Change Password)
 app.put('/api/auth/profile', (req, res) => {
@@ -348,6 +360,10 @@ app.delete('/api/staff/:id', (req, res) => {
 });
 
 // Emails Dispatch Center / Outbox
+app.get('/api/emails/status', (req, res) => {
+  res.json(getEmailServiceStatus());
+});
+
 app.get('/api/emails', (req, res) => {
   const history = getEmailHistory();
   res.json(history);

@@ -7,11 +7,25 @@ let dbError: string | null = null;
 let saveTimeout: NodeJS.Timeout | null = null;
 
 export async function initDb(): Promise<boolean> {
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
     console.log('[Database] No DATABASE_URL provided. Running with In-Memory / Local store.');
     return false;
+  }
+
+  // Automatic Fix for Render.com PostgreSQL:
+  // Render provides an "Internal Database URL" (e.g. host is dpg-xxxx-a without domain) which only resolves inside Render.
+  // When running outside Render, auto-resolve to Render's external host: dpg-xxxx-a.oregon-postgres.render.com
+  try {
+    const parsed = new URL(connectionString);
+    if (parsed.hostname.startsWith('dpg-') && !parsed.hostname.includes('.')) {
+      console.log(`[Database] Detectado host interno de Render (${parsed.hostname}). Ajustando automáticamente a host externo.`);
+      parsed.hostname = `${parsed.hostname}.oregon-postgres.render.com`;
+      connectionString = parsed.toString();
+    }
+  } catch (err: any) {
+    // If URL parsing fails, continue with original connectionString
   }
 
   try {
@@ -20,6 +34,11 @@ export async function initDb(): Promise<boolean> {
       connectionString,
       ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
+    });
+
+    // Guard against unhandled background pool errors
+    pool.on('error', (err) => {
+      console.warn('[Database] Background pool connection warning:', err.message);
     });
 
     const client = await pool.connect();
@@ -57,7 +76,12 @@ export async function initDb(): Promise<boolean> {
   } catch (err: any) {
     isConnected = false;
     dbError = err.message || 'Error connecting to PostgreSQL';
-    console.error('[Database] Failed to connect to PostgreSQL:', dbError);
+    if (pool) {
+      pool.end().catch(() => {});
+      pool = null;
+    }
+    console.warn('[Database] Advertencia al conectar con PostgreSQL:', dbError);
+    console.log('[Database] Continuando de forma segura en modo In-Memory.');
     return false;
   }
 }

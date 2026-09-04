@@ -95,9 +95,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       setMaskedEmail(res.maskedEmail);
       setVoterName(res.name);
       setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
-      setOtpCode(''); // No mostrar ni autollenar
+      setOtpCode('');
       setOtpStep('verify');
-      setSuccessMessage(`Código enviado exitosamente a ${res.maskedEmail}. Revise su bandeja de entrada o spam.`);
+      setSuccessMessage(`Hemos enviado su código de seguridad al correo ${res.maskedEmail}. Por favor revise su bandeja de entrada o spam.`);
     } catch (err: any) {
       setError(err.message || 'No se encontró la cédula en el censo del conjunto.');
     } finally {

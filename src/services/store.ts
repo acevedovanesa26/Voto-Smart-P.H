@@ -56,6 +56,7 @@ class DataStore {
   private emailLogs: EmailLog[] = [...DEMO_EMAIL_LOGS];
   private resetRequests: PasswordResetRequest[] = [];
   private userPasswords: Map<string, string> = new Map([
+    ['motatovanesa@gmail.com', 'admin123'],
     ['admin@votosmart.app', 'admin123'],
     ['administracion@torresdelparque.com', 'admin123'],
     ['admin@torresdelparque.com', 'admin123'],
@@ -1452,9 +1453,19 @@ class DataStore {
       }
       if (Array.isArray(snapshot.users) && snapshot.users.length > 0) {
         this.users = snapshot.users;
+        for (const demoUser of DEMO_USERS) {
+          if (!this.users.some(u => u.email.toLowerCase() === demoUser.email.toLowerCase())) {
+            this.users.push(demoUser);
+          }
+        }
       }
       if (Array.isArray(snapshot.owners) && snapshot.owners.length > 0) {
         this.owners = snapshot.owners;
+        for (const demoOwner of DEMO_OWNERS) {
+          if (!this.owners.some(o => o.email.toLowerCase() === demoOwner.email.toLowerCase() || o.documentNumber === demoOwner.documentNumber)) {
+            this.owners.push(demoOwner);
+          }
+        }
       }
       if (Array.isArray(snapshot.assemblies) && snapshot.assemblies.length > 0) {
         this.assemblies = snapshot.assemblies;

@@ -97,9 +97,9 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
       setMaskedEmail(res.maskedEmail);
       setVoterName(res.name);
       setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
-      setOtpCode(''); // No mostrar ni prellenar: el usuario debe revisarlo en su correo
+      setOtpCode('');
       setOtpStep('verify');
-      setSuccessVoter(`Hemos enviado su código de seguridad de 6 dígitos al correo electrónico ${res.maskedEmail}. Por favor revise su bandeja de entrada o carpeta de spam.`);
+      setSuccessVoter(`Hemos enviado su código de seguridad de 6 dígitos al correo registrado ${res.maskedEmail}. Por favor revise su bandeja de entrada o spam.`);
       setResendCooldown(30);
       const timer = setInterval(() => {
         setResendCooldown((prev) => {
