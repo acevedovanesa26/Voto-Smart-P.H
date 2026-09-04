@@ -183,6 +183,21 @@ export const DEMO_USERS: User[] = [
     status: 'active',
     complexId: 'complex-1',
     createdAt: '2026-01-20T10:00:00Z'
+  },
+  {
+    id: 'user-owner-fernando',
+    name: 'Fernando Gómez Vargas',
+    email: 'fernando.gomez@outlook.com',
+    role: 'owner',
+    phone: '+57 315 888 9911',
+    documentType: 'CC',
+    documentNumber: '1.020.345.678',
+    apartment: 'Apto 201',
+    building: 'Torre B',
+    coefficient: 7.50,
+    status: 'active',
+    complexId: 'complex-1',
+    createdAt: '2026-01-20T10:00:00Z'
   }
 ];
 
@@ -198,6 +213,20 @@ export const DEMO_OWNERS: Owner[] = [
     building: 'Torre A',
     apartment: 'Apto 401',
     coefficient: 8.5000,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-fernando',
+    complexId: 'complex-1',
+    name: 'Fernando Gómez Vargas',
+    documentType: 'CC',
+    documentNumber: '1.020.345.678',
+    email: 'fernando.gomez@outlook.com',
+    phone: '+57 315 888 9911',
+    building: 'Torre B',
+    apartment: 'Apto 201',
+    coefficient: 7.5000,
     status: 'active',
     createdAt: '2026-01-15T08:00:00Z'
   },
