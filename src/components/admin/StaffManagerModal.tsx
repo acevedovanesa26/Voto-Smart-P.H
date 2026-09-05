@@ -245,7 +245,7 @@ export const StaffManagerModal: React.FC<StaffManagerModalProps> = ({ isOpen, on
                   <input
                     type="email"
                     required
-                    placeholder="correo@ejemplo.com"
+                    placeholder="ejemplo@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
@@ -287,7 +287,7 @@ export const StaffManagerModal: React.FC<StaffManagerModalProps> = ({ isOpen, on
                 <label className="block font-semibold text-slate-700 mb-1">Número Documento</label>
                 <input
                   type="text"
-                  placeholder="1020304050"
+                  placeholder="ej: 12345678"
                   value={documentNumber}
                   onChange={(e) => setDocumentNumber(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"

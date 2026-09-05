@@ -33,7 +33,7 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
 
   // Test send state
-  const [testEmail, setTestEmail] = useState('motatovanesa@gmail.com');
+  const [testEmail, setTestEmail] = useState('');
   const [testSubject, setTestSubject] = useState('Prueba de Verificación VotoSmart');
   const [testMessage, setTestMessage] = useState('Este es un mensaje de prueba para verificar la entrega de correos de la plataforma.');
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -144,7 +144,7 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
                 required
                 value={testEmail}
                 onChange={(e) => setTestEmail(e.target.value)}
-                placeholder="correo@ejemplo.com"
+                placeholder="ejemplo@correo.com"
                 className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
               />
             </div>

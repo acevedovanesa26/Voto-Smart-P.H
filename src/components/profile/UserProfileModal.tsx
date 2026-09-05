@@ -280,7 +280,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="correo@ejemplo.com"
+                      placeholder="ejemplo@correo.com"
                       className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
                     />
                   </div>
@@ -328,7 +328,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                       type="text"
                       value={documentNumber}
                       onChange={(e) => setDocumentNumber(e.target.value)}
-                      placeholder="Ej: 79845612"
+                      placeholder="ej: 12345678"
                       className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
                     />
                   </div>
