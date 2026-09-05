@@ -203,33 +203,6 @@ class DataStore {
     if (!user && !owner && cleanDoc.includes('@')) {
       user = this.getUserByEmail(cleanDoc);
       owner = this.owners.find(o => o.email.toLowerCase() === cleanDoc.toLowerCase());
-
-      // Auto-provision if not found yet (e.g. testing with @ucentral.edu.co or any institutional/personal email)
-      if (!user && !owner && cleanDoc.includes('.')) {
-        const cleanEmail = cleanDoc.toLowerCase().trim();
-        const localPart = cleanEmail.split('@')[0];
-        const formattedName = localPart
-          .replace(/[._-]/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-        
-        const newOwner: Owner = {
-          id: `owner-${Date.now()}`,
-          complexId: this.complex.id,
-          name: formattedName.length > 2 ? `Copropietario ${formattedName}` : 'Copropietario Verificado',
-          email: cleanEmail,
-          phone: '+57 312 000 0000',
-          documentType: 'CC',
-          documentNumber: Math.floor(1000000000 + Math.random() * 900000000).toString(),
-          building: 'Torre A',
-          apartment: 'Apto 502',
-          coefficient: 7.5,
-          status: 'active',
-          hasProxy: false,
-          createdAt: new Date().toISOString()
-        };
-        this.owners.unshift(newOwner);
-        owner = newOwner;
-      }
     }
 
     // Try by apartment if entered (e.g. "302" or "Apto 302")
@@ -245,7 +218,7 @@ class DataStore {
     }
 
     if (!user && !owner) {
-      throw new Error(`No se encontró ningún copropietario registrado con la cédula "${cleanDoc}" en ${this.complex.name}. Puede ingresar con su correo electrónico (ej: usuario@ucentral.edu.co) o registrarse como nuevo copropietario.`);
+      throw new Error(`No se encontró ningún copropietario registrado con la cédula "${cleanDoc}" en ${this.complex.name}. Verifique el número o regístrese como nuevo copropietario.`);
     }
 
     const email = user?.email || owner?.email;

@@ -203,20 +203,6 @@ export const DEMO_USERS: User[] = [
 
 export const DEMO_OWNERS: Owner[] = [
   {
-    id: 'owner-ucentral',
-    complexId: 'complex-1',
-    name: 'Copropietario Universidad Central',
-    documentType: 'CC',
-    documentNumber: '52.987.654',
-    email: 'comunidad@ucentral.edu.co',
-    phone: '+57 312 999 8877',
-    building: 'Torre A',
-    apartment: 'Apto 502',
-    coefficient: 8.0000,
-    status: 'active',
-    createdAt: '2026-01-15T08:00:00Z'
-  },
-  {
     id: 'owner-vanesa',
     complexId: 'complex-1',
     name: 'Vanesa Motato',

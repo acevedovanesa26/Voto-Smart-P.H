@@ -278,7 +278,7 @@ export const ComplexSwitcherModal: React.FC<ComplexSwitcherModalProps> = ({ isOp
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="ejemplo@correo.com"
+                placeholder="admin@torresdelparque.com"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white"
               />
             </div>

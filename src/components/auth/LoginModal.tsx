@@ -221,9 +221,48 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       required
                       value={voterCedula}
                       onChange={(e) => setVoterCedula(e.target.value)}
-                      placeholder="ej: 12345678"
+                      placeholder="Ej: 79845612 o 52987123"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
                     />
+                  </div>
+                </div>
+
+                {/* Quick Demo ID selector */}
+                <div className="pt-1 pb-1">
+                  <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">
+                    Cédulas registradas de prueba (haz clic para probar):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('79.845.612');
+                        handleRequestOtp('79.845.612');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      79.845.612 (Apto 302)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('41.905.432');
+                        handleRequestOtp('41.905.432');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      41.905.432 (Apto 101)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterCedula('19.876.543');
+                        handleRequestOtp('19.876.543');
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 rounded-lg text-[11px] font-medium text-slate-700 transition-colors border border-slate-200"
+                    >
+                      19.876.543 (Apto 501)
+                    </button>
                   </div>
                 </div>
 
@@ -260,7 +299,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       maxLength={6}
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123456"
+                      placeholder="Ej: 849201"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold"
                     />
                   </div>
@@ -307,7 +346,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   required
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="ejemplo@correo.com"
+                  placeholder="administracion@torresdelparque.com"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
                 />
               </div>
