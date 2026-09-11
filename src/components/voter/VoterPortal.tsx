@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Download,
+  Eye,
+  FileText,
   Info,
   Lock,
   Printer,
@@ -18,6 +20,8 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { Assembly, Candidate, Vote, VoteOption } from '../../types';
 import { Alert, Badge, Button, Card, Modal } from '../common/UIComponents';
+import { downloadFile } from '../../utils/pdfHelper';
+import { PdfPreviewModal } from '../common/PdfPreviewModal';
 
 interface VoterPortalProps {
   assemblyId?: string;
@@ -32,6 +36,7 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
   const [assembly, setAssembly] = useState<Assembly | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [votedMap, setVotedMap] = useState<Record<string, boolean>>({});
+  const [eligibilityMap, setEligibilityMap] = useState<Record<string, { eligible: boolean; reason?: string }>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   // Active voting modal state
@@ -50,6 +55,32 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
   // Candidate detail preview modal
   const [previewCandidate, setPreviewCandidate] = useState<Candidate | null>(null);
 
+  // PDF Preview modal state
+  const [pdfModalState, setPdfModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+    url: string;
+    fileName: string;
+  }>({
+    isOpen: false,
+    title: '',
+    url: '',
+    fileName: ''
+  });
+
+  const handleDownloadPdf = (url: string, fileName: string) => {
+    downloadFile(url, fileName);
+  };
+
+  const handleOpenPdfPreview = (url: string, title: string, fileName: string) => {
+    setPdfModalState({
+      isOpen: true,
+      title,
+      url,
+      fileName
+    });
+  };
+
   const loadVoterData = async () => {
     try {
       setIsLoading(true);
@@ -60,14 +91,22 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
       setAssembly(asm);
       setVotes(vList);
 
-      // Check voting status for current user for each vote
+      // Check voting status & eligibility for current user for each vote
       if (user) {
         const statusMap: Record<string, boolean> = {};
+        const eligMap: Record<string, { eligible: boolean; reason?: string }> = {};
         for (const v of vList) {
           const hasVoted = await api.checkHasVoted(v.id, user.id, user.documentNumber, user.apartment);
           statusMap[v.id] = hasVoted;
+          try {
+            const elig = await api.checkVoterEligibility(v.id, user.id, user.documentNumber);
+            eligMap[v.id] = elig;
+          } catch (e) {
+            eligMap[v.id] = { eligible: true };
+          }
         }
         setVotedMap(statusMap);
+        setEligibilityMap(eligMap);
       }
     } catch (err) {
       console.error(err);
@@ -81,6 +120,11 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
   }, [assemblyId, user]);
 
   const handleOpenVote = (vote: Vote) => {
+    const elig = eligibilityMap[vote.id];
+    if (elig && !elig.eligible) {
+      alert(elig.reason || 'No estás habilitado para participar en esta votación específica según las reglas del padrón electoral.');
+      return;
+    }
     setSelectedVote(vote);
     setSelectedOptions([]);
     setVotingStep('select');
@@ -114,6 +158,14 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
 
     setIsSubmitting(true);
     try {
+      // Re-verify backend eligibility before casting
+      const elig = await api.checkVoterEligibility(selectedVote.id, user.id, user.documentNumber);
+      if (!elig.eligible) {
+        alert(elig.reason || 'No estás habilitado para emitir tu voto en este punto.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const res = await api.castVote(selectedVote.id, {
         voterUserId: user.id,
         voterName: user.name,
@@ -220,6 +272,14 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
             {votes.map((vote) => {
               const hasVoted = votedMap[vote.id];
               const isActive = vote.status === 'active';
+              const elig = eligibilityMap[vote.id] || { eligible: true };
+              const isRestricted = !elig.eligible;
+
+              // Derive filter summary badge
+              const targetAudience = vote.filterConfig?.targetAudience || vote.filterConfig?.filterType;
+              const isCouncilOnly = targetAudience === 'council_only' || vote.filterConfig?.councilOnly;
+              const isSpecificTowers = targetAudience === 'specific_towers' || targetAudience === 'by_tower';
+              const isTowersAndCouncil = targetAudience === 'towers_and_council' || targetAudience === 'tower_and_council';
 
               return (
                 <Card
@@ -227,6 +287,8 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                   className={`p-6 sm:p-8 transition-all border-2 ${
                     hasVoted
                       ? 'border-emerald-200 bg-emerald-50/20'
+                      : isRestricted && isActive
+                      ? 'border-amber-200 bg-amber-50/30'
                       : isActive
                       ? 'border-teal-500 shadow-lg shadow-teal-500/5 bg-white'
                       : 'border-slate-200 bg-slate-50/60 opacity-80'
@@ -240,8 +302,8 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" /> VOTO REGISTRADO
                           </Badge>
                         ) : isActive ? (
-                          <Badge variant="teal" size="lg" className="animate-pulse font-bold">
-                            ● VOTACIÓN ABIERTA AHORA
+                          <Badge variant={isRestricted ? 'amber' : 'teal'} size="lg" className={isRestricted ? 'font-bold' : 'animate-pulse font-bold'}>
+                            {isRestricted ? 'RESTREÑIDO PARA SU PERFIL' : '● VOTACIÓN ABIERTA AHORA'}
                           </Badge>
                         ) : (
                           <Badge variant="slate" size="md">
@@ -252,6 +314,23 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                         <span className="text-xs font-semibold text-slate-500 uppercase">
                           {vote.type === 'candidate_election' ? 'Elección de Consejo' : 'Votación Reglamentaria'}
                         </span>
+
+                        {/* Audience Filter Badges */}
+                        {isCouncilOnly && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                            <Award className="w-3 h-3 text-amber-700" /> Exclusivo Consejo
+                          </span>
+                        )}
+                        {isSpecificTowers && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                            Torres: {vote.filterConfig?.allowedTowers?.join(', ')}
+                          </span>
+                        )}
+                        {isTowersAndCouncil && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                            Torres {vote.filterConfig?.allowedTowers?.join(', ')} + Consejo
+                          </span>
+                        )}
                       </div>
 
                       <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
@@ -269,6 +348,17 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                         <span>•</span>
                         <span>{vote.requiresCoefficient ? 'Ponderado por Coeficiente de Copropiedad' : '1 Inmueble = 1 Voto'}</span>
                       </div>
+
+                      {/* Explicit Restriction Notice if not eligible */}
+                      {isRestricted && isActive && (
+                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                          <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold">Aviso de padrón electoral: </span>
+                            <span>{elig.reason || 'Este punto de votación no está habilitado para su inmueble o perfil de copropietario.'}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Button */}
@@ -278,14 +368,20 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                           <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Sufragio Confirmado
                         </div>
                       ) : isActive ? (
-                        <Button
-                          size="xl"
-                          variant="primary"
-                          onClick={() => handleOpenVote(vote)}
-                          className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 font-black shadow-md tracking-wide px-8 text-lg"
-                        >
-                          VOTAR AHORA
-                        </Button>
+                        isRestricted ? (
+                          <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl text-center text-xs font-bold text-slate-500 flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-slate-400" /> No Habilitado
+                          </div>
+                        ) : (
+                          <Button
+                            size="xl"
+                            variant="primary"
+                            onClick={() => handleOpenVote(vote)}
+                            className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 font-black shadow-md tracking-wide px-8 text-lg"
+                          >
+                            VOTAR AHORA
+                          </Button>
+                        )
                       ) : (
                         <Button size="md" variant="ghost" disabled className="text-slate-400">
                           {vote.status === 'finished' ? 'Cerrada' : 'En Espera'}
@@ -338,6 +434,33 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                 )}
               </div>
 
+              {selectedVote.attachmentPdfUrl && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 font-semibold text-slate-800 truncate">
+                    <FileText className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span className="truncate">Documento Adjunto: {selectedVote.attachmentPdfName || 'Anexo_Votacion.pdf'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenPdfPreview(selectedVote.attachmentPdfUrl!, selectedVote.title, selectedVote.attachmentPdfName || 'Anexo_Votacion.pdf')}
+                      leftIcon={<Eye className="w-3.5 h-3.5" />}
+                    >
+                      Ver
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadPdf(selectedVote.attachmentPdfUrl!, selectedVote.attachmentPdfName || 'Anexo_Votacion.pdf')}
+                      leftIcon={<Download className="w-3.5 h-3.5" />}
+                    >
+                      Descargar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Candidates Grid (if candidate election) */}
               {selectedVote.type === 'candidate_election' && selectedVote.candidates && selectedVote.candidates.length > 0 ? (
                 <div className="space-y-4">
@@ -380,20 +503,37 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                             </p>
                           </div>
 
-                          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-3">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewCandidate(cand);
-                              }}
-                              className="text-xs font-bold text-teal-700 hover:underline"
-                            >
-                              Ver Propuestas Completas →
-                            </button>
+                          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-3 gap-2">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewCandidate(cand);
+                                }}
+                                className="text-xs font-bold text-teal-700 hover:underline"
+                              >
+                                Ver Propuestas →
+                              </button>
+
+                              {cand.proposalPdfUrl && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadPdf(cand.proposalPdfUrl!, cand.proposalPdfName || `Propuesta_${cand.name}.pdf`);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 bg-teal-100/70 hover:bg-teal-200/80 px-2 py-0.5 rounded-md border border-teal-300 transition-colors shadow-2xs"
+                                  title="Descargar Plan de Trabajo / Propuesta en PDF"
+                                >
+                                  <FileText className="w-3 h-3 text-teal-700" />
+                                  <span>PDF</span>
+                                </button>
+                              )}
+                            </div>
 
                             <div
-                              className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
+                              className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs transition-colors shrink-0 ${
                                 isSelected ? 'bg-teal-600 text-white' : 'border-2 border-slate-300'
                               }`}
                             >
@@ -636,6 +776,50 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
               </div>
             </div>
 
+            {previewCandidate.proposalPdfUrl && (
+              <div className="p-3.5 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-teal-950 block text-xs truncate">
+                      {previewCandidate.proposalPdfName || 'Plan de Trabajo y Propuestas (PDF)'}
+                    </span>
+                    <span className="text-[10px] text-teal-700 font-medium">
+                      Documento oficial adjuntado por el candidato
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenPdfPreview(
+                      previewCandidate.proposalPdfUrl!,
+                      `Propuesta de ${previewCandidate.name}`,
+                      previewCandidate.proposalPdfName || `Propuesta_${previewCandidate.name}.pdf`
+                    )}
+                    leftIcon={<Eye className="w-3.5 h-3.5 text-teal-600" />}
+                  >
+                    Ver
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => handleDownloadPdf(
+                      previewCandidate.proposalPdfUrl!,
+                      previewCandidate.proposalPdfName || `Propuesta_${previewCandidate.name}.pdf`
+                    )}
+                    leftIcon={<Download className="w-3.5 h-3.5" />}
+                    className="bg-teal-600 hover:bg-teal-700"
+                  >
+                    Descargar
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="pt-2 flex justify-end">
               <Button size="md" variant="primary" onClick={() => setPreviewCandidate(null)}>
                 Cerrar Perfil
@@ -644,6 +828,15 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
           </div>
         </Modal>
       )}
+
+      {/* PDF PREVIEW MODAL */}
+      <PdfPreviewModal
+        isOpen={pdfModalState.isOpen}
+        onClose={() => setPdfModalState({ ...pdfModalState, isOpen: false })}
+        title={pdfModalState.title}
+        pdfUrl={pdfModalState.url}
+        fileName={pdfModalState.fileName}
+      />
     </div>
   );
 };

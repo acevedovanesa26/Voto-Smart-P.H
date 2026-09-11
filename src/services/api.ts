@@ -208,16 +208,36 @@ export const api = {
   },
 
   // Owners
-  async getOwners(): Promise<Owner[]> {
-    const res = await fetch(`${API_BASE}/owners`);
+  async getOwners(complexId?: string): Promise<Owner[]> {
+    const url = complexId ? `${API_BASE}/owners?complexId=${encodeURIComponent(complexId)}` : `${API_BASE}/owners`;
+    const res = await fetch(url);
     return res.json();
   },
 
-  async addOwner(owner: Omit<Owner, 'id' | 'complexId' | 'createdAt'>): Promise<Owner> {
+  async getCouncilMembers(complexId?: string): Promise<Owner[]> {
+    const url = complexId ? `${API_BASE}/owners/council?complexId=${encodeURIComponent(complexId)}` : `${API_BASE}/owners/council`;
+    const res = await fetch(url);
+    return res.json();
+  },
+
+  async toggleCouncilMember(id: string, isCouncilMember: boolean, councilRole?: string): Promise<{ success: boolean; owner: Owner }> {
+    const res = await fetch(`${API_BASE}/owners/${id}/toggle-council`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isCouncilMember, councilRole })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al actualizar estado en el consejo');
+    }
+    return res.json();
+  },
+
+  async addOwner(owner: Omit<Owner, 'id' | 'complexId' | 'createdAt'>, complexId?: string): Promise<Owner> {
     const res = await fetch(`${API_BASE}/owners`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(owner)
+      body: JSON.stringify({ ...owner, complexId })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -235,11 +255,11 @@ export const api = {
     return res.json();
   },
 
-  async importOwnersBatch(owners: Omit<Owner, 'id' | 'complexId' | 'createdAt'>[]): Promise<{ successCount: number; total: number }> {
+  async importOwnersBatch(owners: Omit<Owner, 'id' | 'complexId' | 'createdAt'>[], complexId?: string): Promise<{ successCount: number; total: number }> {
     const res = await fetch(`${API_BASE}/owners/batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ owners })
+      body: JSON.stringify({ owners, complexId })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -259,11 +279,11 @@ export const api = {
     return true;
   },
 
-  async deleteOwnersBatch(ids: string[]): Promise<{ success: boolean; deletedCount: number; total: number }> {
+  async deleteOwnersBatch(ids: string[], complexId?: string): Promise<{ success: boolean; deletedCount: number; total: number }> {
     const res = await fetch(`${API_BASE}/owners/delete-batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids })
+      body: JSON.stringify({ ids, complexId })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -273,8 +293,9 @@ export const api = {
   },
 
   // Assemblies
-  async getAssemblies(): Promise<Assembly[]> {
-    const res = await fetch(`${API_BASE}/assemblies`);
+  async getAssemblies(complexId?: string): Promise<Assembly[]> {
+    const url = complexId ? `${API_BASE}/assemblies?complexId=${encodeURIComponent(complexId)}` : `${API_BASE}/assemblies`;
+    const res = await fetch(url);
     return res.json();
   },
 
@@ -372,6 +393,45 @@ export const api = {
     return res.json();
   },
 
+  async updateVote(voteId: string, voteData: Partial<Vote>): Promise<Vote> {
+    const res = await fetch(`${API_BASE}/votes/${voteId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(voteData)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al actualizar votación');
+    }
+    return res.json();
+  },
+
+  async deleteVote(voteId: string, deletedBy?: string): Promise<{ success: boolean; deletedVoteId: string }> {
+    const res = await fetch(`${API_BASE}/votes/${voteId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deletedBy })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al eliminar votación');
+    }
+    return res.json();
+  },
+
+  async resetVote(voteId: string, resetBy?: string): Promise<Vote> {
+    const res = await fetch(`${API_BASE}/votes/${voteId}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetBy })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al reiniciar votación');
+    }
+    return res.json();
+  },
+
   async startVote(voteId: string, startedBy: string): Promise<Vote> {
     const res = await fetch(`${API_BASE}/votes/${voteId}/start`, {
       method: 'POST',
@@ -432,6 +492,15 @@ export const api = {
     const res = await fetch(`${API_BASE}/votes/${voteId}/has-voted?${params.toString()}`);
     const data = await res.json();
     return !!data.hasVoted;
+  },
+
+  async checkVoterEligibility(voteId: string, userId: string, documentNumber?: string): Promise<{ eligible: boolean; reason?: string; owner?: Owner }> {
+    const params = new URLSearchParams({
+      userId,
+      documentNumber: documentNumber || ''
+    });
+    const res = await fetch(`${API_BASE}/votes/${voteId}/eligibility?${params.toString()}`);
+    return res.json();
   },
 
   // Notes
@@ -585,8 +654,12 @@ export const api = {
   },
 
   // Audit Logs
-  async getAuditLogs(assemblyId?: string): Promise<AuditLog[]> {
-    const url = assemblyId ? `${API_BASE}/audit-logs?assemblyId=${assemblyId}` : `${API_BASE}/audit-logs`;
+  async getAuditLogs(assemblyId?: string, complexId?: string): Promise<AuditLog[]> {
+    const params = new URLSearchParams();
+    if (assemblyId) params.append('assemblyId', assemblyId);
+    if (complexId) params.append('complexId', complexId);
+    const qs = params.toString();
+    const url = qs ? `${API_BASE}/audit-logs?${qs}` : `${API_BASE}/audit-logs`;
     const res = await fetch(url);
     return res.json();
   },

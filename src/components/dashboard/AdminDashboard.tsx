@@ -57,9 +57,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       setIsLoading(true);
       const [asmList, ownList, aLogs, dStatus] = await Promise.all([
-        api.getAssemblies(),
-        api.getOwners(),
-        api.getAuditLogs(),
+        api.getAssemblies(complex?.id),
+        api.getOwners(complex?.id),
+        api.getAuditLogs(undefined, complex?.id),
         api.getDbStatus().catch(() => null)
       ]);
       setAssemblies(asmList);

@@ -78,6 +78,8 @@ export interface Owner {
   status: 'active' | 'inactive';
   hasProxy?: boolean;
   proxyName?: string;
+  isCouncilMember?: boolean;
+  councilRole?: string;
   createdAt: string;
 }
 
@@ -134,9 +136,22 @@ export interface Candidate {
   building: string;
   profileSummary: string;
   proposals: string;
+  proposalPdfUrl?: string;
+  proposalPdfName?: string;
+  proposalPdfSize?: number;
   experience?: string;
   photoUrl: string;
   status: 'active' | 'inactive';
+}
+
+export type VoterFilterType = 'all' | 'specific_owners' | 'by_tower' | 'council_only' | 'tower_and_council';
+
+export interface VoteFilterConfig {
+  filterType: VoterFilterType;
+  targetAudience?: 'all' | 'council_only' | 'specific_towers' | 'towers_and_council' | 'custom' | VoterFilterType;
+  allowedTowers?: string[];
+  allowedOwnerIds?: string[];
+  councilOnly?: boolean;
 }
 
 export interface Vote {
@@ -155,10 +170,15 @@ export interface Vote {
   isSecret: boolean;
   showLiveResults: boolean;
   allowAbstain: boolean;
+  filterConfig?: VoteFilterConfig;
+  eligibleVotersCount?: number;
   startedAt?: string;
   closedAt?: string;
   closedBy?: string;
   totalVoters?: number;
+  attachmentPdfUrl?: string;
+  attachmentPdfName?: string;
+  attachmentPdfSize?: number;
 }
 
 export interface VoteRecord {
@@ -235,6 +255,7 @@ export interface AssemblyMinutes {
 
 export interface AuditLog {
   id: string;
+  complexId?: string;
   assemblyId?: string;
   userId: string;
   userName: string;

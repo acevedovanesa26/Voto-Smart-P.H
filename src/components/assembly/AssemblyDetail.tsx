@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Award,
+  Building2,
   Calendar,
   CheckCircle2,
   Clock,
@@ -10,6 +11,8 @@ import {
   FileCheck2,
   FileSpreadsheet,
   FileText,
+  Filter,
+  Lock,
   Mail,
   MapPin,
   Play,
@@ -44,6 +47,8 @@ import { exportOwnersToExcel, exportQuorumToExcel, exportVoteResultsToExcel } fr
 import { generateMinutesPDF } from '../../utils/pdfGenerator';
 import { Alert, Badge, Button, Card, Modal, StatCard } from '../common/UIComponents';
 import { EditAssemblyModal } from './EditAssemblyModal';
+import { downloadFile, fileToBase64, createCandidateProposalPdfUri } from '../../utils/pdfHelper';
+import { PdfPreviewModal } from '../common/PdfPreviewModal';
 
 interface AssemblyDetailProps {
   assemblyId: string;
@@ -80,6 +85,18 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
   const [showUploadDocModal, setShowUploadDocModal] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editingVote, setEditingVote] = useState<Vote | null>(null);
+  const [pdfPreviewState, setPdfPreviewState] = useState<{
+    isOpen: boolean;
+    title: string;
+    url: string;
+    fileName: string;
+  }>({
+    isOpen: false,
+    title: '',
+    url: '',
+    fileName: ''
+  });
   const [isSendingResults, setIsSendingResults] = useState(false);
   const [isSendingMinutes, setIsSendingMinutes] = useState(false);
 
@@ -620,10 +637,40 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                   <h4 className="text-base font-bold text-slate-900 leading-snug">{vote.title}</h4>
                   <p className="text-xs text-slate-600 leading-relaxed">{vote.question}</p>
 
-                  <div className="p-3 bg-slate-50 rounded-xl space-y-1 text-xs text-slate-700">
+                  <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
                     <p><span className="font-bold">Opciones / Candidatos:</span> {vote.options.length}</p>
                     <p><span className="font-bold">Ponderado por Coeficiente:</span> {vote.requiresCoefficient ? 'Sí (Ley 675)' : 'No (1 voto = 1 apto)'}</p>
                     <p><span className="font-bold">Tipo de Sufragio:</span> {vote.isSecret ? 'Voto Secreto Encriptado' : 'Voto Nominal y Público'}</p>
+
+                    {/* Voting Audience Filter Tag */}
+                    <div className="pt-1 border-t border-slate-200/60">
+                      {vote.filterConfig?.targetAudience === 'council_only' ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          <Award className="w-3.5 h-3.5 text-amber-600" />
+                          Exclusivo Consejo de Administración
+                        </div>
+                      ) : vote.filterConfig?.targetAudience === 'specific_towers' ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                          <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                          Torres autorizadas: {vote.filterConfig.allowedTowers?.join(', ') || 'Ninguna'}
+                        </div>
+                      ) : vote.filterConfig?.targetAudience === 'towers_and_council' ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                          <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                          Torres ({vote.filterConfig.allowedTowers?.join(', ') || 'Todas'}) + Consejo
+                        </div>
+                      ) : vote.filterConfig?.targetAudience === 'custom' ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                          <Users className="w-3.5 h-3.5 text-purple-600" />
+                          Copropietarios específicos ({vote.filterConfig.allowedOwnerIds?.length || 0})
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-medium text-slate-600 bg-white border border-slate-200">
+                          <Users className="w-3 h-3 text-slate-400" />
+                          Habilitado para todos los copropietarios
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1062,6 +1109,7 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
       {/* CREATE VOTE MODAL */}
       <CreateVoteModal
         isOpen={showNewVoteModal}
+        complexId={complex?.id}
         onClose={() => setShowNewVoteModal(false)}
         assemblyId={assemblyId}
         onVoteCreated={() => {
@@ -1132,10 +1180,11 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
 // Modal for Creating New Vote with 5 types and rich candidate registration
 const CreateVoteModal: React.FC<{
   isOpen: boolean;
+  complexId?: string;
   onClose: () => void;
   assemblyId: string;
   onVoteCreated: () => void;
-}> = ({ isOpen, onClose, assemblyId, onVoteCreated }) => {
+}> = ({ isOpen, complexId, onClose, assemblyId, onVoteCreated }) => {
   const [title, setTitle] = useState('');
   const [question, setQuestion] = useState('');
   const [type, setType] = useState<'yes_no' | 'single_choice' | 'multiple_choice' | 'candidate_election'>('single_choice');
@@ -1145,6 +1194,11 @@ const CreateVoteModal: React.FC<{
   const [maxSelections, setMaxSelections] = useState(1);
   const [includeBlankVote, setIncludeBlankVote] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Filter Audience Configuration
+  const [targetAudience, setTargetAudience] = useState<'all' | 'council_only' | 'specific_towers' | 'towers_and_council' | 'custom'>('all');
+  const [selectedTowers, setSelectedTowers] = useState<string[]>([]);
+  const [selectedCustomOwnerIds, setSelectedCustomOwnerIds] = useState<string[]>([]);
 
   // Candidate Registration state
   const [registeredOwners, setRegisteredOwners] = useState<Owner[]>([]);
@@ -1160,11 +1214,27 @@ const CreateVoteModal: React.FC<{
 
   useEffect(() => {
     if (isOpen) {
-      api.getOwners().then((list) => {
+      api.getOwners(complexId).then((list) => {
         setRegisteredOwners(list);
       }).catch(console.error);
     }
-  }, [isOpen]);
+  }, [isOpen, complexId]);
+
+  // Derived available options
+  const availableTowers = Array.from(new Set(registeredOwners.map((o) => o.building || 'Torre Principal'))).sort();
+  const councilOwners = registeredOwners.filter((o) => !!o.isCouncilMember);
+
+  const eligibleOwners = registeredOwners.filter((o) => {
+    if (targetAudience === 'all') return true;
+    if (targetAudience === 'council_only') return !!o.isCouncilMember;
+    if (targetAudience === 'specific_towers') return selectedTowers.includes(o.building || 'Torre Principal');
+    if (targetAudience === 'towers_and_council') {
+      return selectedTowers.includes(o.building || 'Torre Principal') || !!o.isCouncilMember;
+    }
+    if (targetAudience === 'custom') return selectedCustomOwnerIds.includes(o.id);
+    return true;
+  });
+  const eligibleCoeff = eligibleOwners.reduce((s, o) => s + (o.coefficient || 0), 0);
 
   const handleOwnerSelect = (ownerId: string) => {
     setSelectedOwnerId(ownerId);
@@ -1241,6 +1311,16 @@ const CreateVoteModal: React.FC<{
       return;
     }
 
+    if ((targetAudience === 'specific_towers' || targetAudience === 'towers_and_council') && selectedTowers.length === 0) {
+      alert('Por favor seleccione al menos una torre o bloque autorizado para esta votación.');
+      return;
+    }
+
+    if (targetAudience === 'custom' && selectedCustomOwnerIds.length === 0) {
+      alert('Por favor seleccione al menos un copropietario autorizado.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       let formattedOptions: { id: string; label: string; description?: string; candidateId?: string }[] = [];
@@ -1280,7 +1360,22 @@ const CreateVoteModal: React.FC<{
         maxSelections: type === 'multiple_choice' || type === 'candidate_election' ? maxSelections : 1,
         minSelections: 1,
         showLiveResults: true,
-        allowAbstain: true
+        allowAbstain: true,
+        filterConfig: {
+          filterType: targetAudience === 'council_only'
+            ? 'council_only'
+            : targetAudience === 'specific_towers'
+            ? 'by_tower'
+            : targetAudience === 'towers_and_council'
+            ? 'tower_and_council'
+            : targetAudience === 'custom'
+            ? 'specific_owners'
+            : 'all',
+          targetAudience,
+          allowedTowers: selectedTowers,
+          allowedOwnerIds: selectedCustomOwnerIds,
+          councilOnly: targetAudience === 'council_only'
+        }
       });
       onVoteCreated();
     } catch (err: any) {
@@ -1559,6 +1654,141 @@ const CreateVoteModal: React.FC<{
             ))}
           </div>
         )}
+
+        {/* VOTER FILTER & AUDIENCE RESTRICTION SECTION */}
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-teal-600" />
+              <span className="font-bold text-slate-900 uppercase text-xs">Padrón de Votantes Habilitados</span>
+            </div>
+            <span className="text-[11px] font-bold text-teal-800 bg-teal-100/80 px-2.5 py-0.5 rounded-full border border-teal-200 self-start sm:self-auto">
+              {eligibleOwners.length} de {registeredOwners.length} habilitados ({eligibleCoeff.toFixed(2)}% coef.)
+            </span>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">¿Quiénes están autorizados para votar en este punto?</label>
+            <select
+              value={targetAudience}
+              onChange={(e) => setTargetAudience(e.target.value as any)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white"
+            >
+              <option value="all">👥 Todos los copropietarios del conjunto</option>
+              <option value="council_only">🏛️ Exclusivo: Solo Miembros del Consejo de Administración</option>
+              <option value="specific_towers">🏢 Por Torres: Solo copropietarios de Torres / Bloques específicos</option>
+              <option value="towers_and_council">🏢 Torres específicas Y Miembros del Consejo</option>
+              <option value="custom">👤 Selección manual de copropietarios específicos</option>
+            </select>
+          </div>
+
+          {/* If specific_towers or towers_and_council */}
+          {(targetAudience === 'specific_towers' || targetAudience === 'towers_and_council') && (
+            <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+              <label className="block font-bold text-slate-700">Seleccione las Torres / Bloques que votan:</label>
+              <div className="flex flex-wrap gap-2">
+                {availableTowers.length === 0 ? (
+                  <p className="text-slate-400 italic">No hay torres registradas en este conjunto.</p>
+                ) : (
+                  availableTowers.map((tower) => {
+                    const isChecked = selectedTowers.includes(tower);
+                    const towerOwners = registeredOwners.filter((o) => (o.building || 'Torre Principal') === tower);
+                    const towerCoeff = towerOwners.reduce((s, o) => s + (o.coefficient || 0), 0);
+                    return (
+                      <label
+                        key={tower}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-colors ${
+                          isChecked
+                            ? 'bg-teal-50 border-teal-500 text-teal-900 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedTowers(selectedTowers.filter((t) => t !== tower));
+                            } else {
+                              setSelectedTowers([...selectedTowers, tower]);
+                            }
+                          }}
+                          className="w-4 h-4 text-teal-600 rounded"
+                        />
+                        <span>{tower}</span>
+                        <span className="text-[10px] text-slate-500 font-normal">({towerOwners.length} aptos • {towerCoeff.toFixed(2)}%)</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              {targetAudience === 'towers_and_council' && (
+                <p className="text-[11px] text-teal-800 font-medium pt-1 bg-teal-50/70 p-2 rounded-lg border border-teal-100">
+                  ✓ Además de las torres seleccionadas, los {councilOwners.length} miembros del Consejo de Administración podrán votar desde cualquier torre.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* If council_only */}
+          {targetAudience === 'council_only' && (
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Award className="w-4 h-4 text-amber-600" />
+                <span>Votación restringida al Consejo de Administración ({councilOwners.length} miembros registrados)</span>
+              </div>
+              {councilOwners.length === 0 ? (
+                <p className="text-rose-700 font-medium pt-1">
+                  ⚠️ Atención: No hay miembros del consejo marcados en el censo de este conjunto. Ingrese a "Copropietarios" y active la casilla de Consejo.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 pt-1.5">
+                  {councilOwners.map((co) => (
+                    <span key={co.id} className="px-2 py-0.5 bg-amber-100/90 border border-amber-300 rounded text-[11px] font-semibold text-amber-950">
+                      {co.name} • {co.building} {co.apartment} ({co.councilRole || 'Consejero'})
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* If custom */}
+          {targetAudience === 'custom' && (
+            <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block font-bold text-slate-700">Seleccione los copropietarios autorizados:</label>
+                <span className="text-[11px] text-slate-500 font-semibold">{selectedCustomOwnerIds.length} seleccionados</span>
+              </div>
+              <div className="max-h-44 overflow-y-auto space-y-1 divide-y divide-slate-100 border border-slate-200 rounded-lg p-2">
+                {registeredOwners.map((o) => {
+                  const isChecked = selectedCustomOwnerIds.includes(o.id);
+                  return (
+                    <label key={o.id} className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedCustomOwnerIds(selectedCustomOwnerIds.filter((id) => id !== o.id));
+                            } else {
+                              setSelectedCustomOwnerIds([...selectedCustomOwnerIds, o.id]);
+                            }
+                          }}
+                          className="w-4 h-4 text-teal-600 rounded"
+                        />
+                        <span className="font-semibold text-slate-900">{o.name}</span>
+                        <span className="text-slate-500 font-normal">({o.building} - {o.apartment})</span>
+                      </div>
+                      <span className="font-mono text-teal-800 font-bold">{o.coefficient.toFixed(2)}%</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3 pt-2">
           <label className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl cursor-pointer">

@@ -3,7 +3,7 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
-import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus } from './server/emailService';
+import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
@@ -426,18 +426,36 @@ app.put('/api/complex', (req, res) => {
   }
 });
 
-// 4. Owners Directory
+// 4. Owners Directory (Multi-Complex Isolated)
 app.get('/api/owners', (req, res) => {
-  res.json(store.getOwners());
+  const { complexId } = req.query;
+  res.json(store.getOwners(complexId as string));
+});
+
+// Council endpoints
+app.get('/api/owners/council', (req, res) => {
+  const { complexId } = req.query;
+  res.json(store.getCouncilMembers(complexId as string));
+});
+
+app.post('/api/owners/:id/toggle-council', (req, res) => {
+  try {
+    const { isCouncilMember, councilRole } = req.body;
+    const updated = store.toggleCouncilMember(req.params.id, isCouncilMember, councilRole);
+    if (!updated) return res.status(404).json({ error: 'Propietario no encontrado' });
+    res.json({ success: true, owner: updated });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 app.post('/api/owners', (req, res) => {
   try {
-    const { name, documentNumber, email, building, apartment, coefficient } = req.body;
+    const { name, documentNumber, email, building, apartment, coefficient, complexId } = req.body;
     if (!name || !documentNumber || !email || !building || !apartment || coefficient === undefined) {
       return res.status(400).json({ error: 'Todos los campos obligatorios deben ser completados' });
     }
-    const newOwner = store.addOwner(req.body);
+    const newOwner = store.addOwner(req.body, complexId);
     res.status(201).json(newOwner);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -456,11 +474,11 @@ app.put('/api/owners/:id', (req, res) => {
 
 app.post('/api/owners/batch', (req, res) => {
   try {
-    const { owners } = req.body;
+    const { owners, complexId } = req.body;
     if (!Array.isArray(owners) || owners.length === 0) {
       return res.status(400).json({ error: 'Lista de propietarios inválida para importación' });
     }
-    const result = store.importOwnersBatch(owners);
+    const result = store.importOwnersBatch(owners, complexId);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -481,20 +499,21 @@ app.delete('/api/owners/:id', (req, res) => {
 
 app.post('/api/owners/delete-batch', (req, res) => {
   try {
-    const { ids } = req.body;
+    const { ids, complexId } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Debe especificar al menos un ID de propietario para eliminar.' });
     }
-    const result = store.deleteOwnersBatch(ids);
+    const result = store.deleteOwnersBatch(ids, complexId);
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 5. Assemblies
+// 5. Assemblies (Multi-Complex Isolated)
 app.get('/api/assemblies', (req, res) => {
-  res.json(store.getAssemblies());
+  const { complexId } = req.query;
+  res.json(store.getAssemblies(complexId as string));
 });
 
 app.get('/api/assemblies/:id', (req, res) => {
@@ -597,6 +616,33 @@ app.get('/api/votes/:id', (req, res) => {
   res.json(vote);
 });
 
+app.put('/api/votes/:id', (req, res) => {
+  try {
+    const updatedVote = store.updateVote(req.params.id, req.body, req.body.updatedBy);
+    res.json(updatedVote);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/votes/:id', (req, res) => {
+  try {
+    const result = store.deleteVote(req.params.id, req.body?.deletedBy);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/votes/:id/reset', (req, res) => {
+  try {
+    const vote = store.resetVote(req.params.id, req.body?.resetBy);
+    res.json(vote);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.post('/api/votes/:id/start', (req, res) => {
   try {
     const { startedBy } = req.body;
@@ -662,6 +708,21 @@ app.get('/api/votes/:id/has-voted', (req, res) => {
   res.json({ hasVoted });
 });
 
+// Check Voter Eligibility before casting (Backend Filter Validation)
+app.get('/api/votes/:id/eligibility', (req, res) => {
+  try {
+    const { userId, documentNumber } = req.query;
+    const result = store.isVoterEligibleForVote(
+      req.params.id,
+      userId as string,
+      documentNumber as string
+    );
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // 9. Notes (Bitácora de Asamblea)
 app.get('/api/assemblies/:id/notes', (req, res) => {
   res.json(store.getNotesByAssembly(req.params.id));
@@ -711,7 +772,7 @@ app.get('/api/assemblies/:id/emails', (req, res) => {
   res.json(store.getEmailLogsByAssembly(req.params.id));
 });
 
-app.post('/api/assemblies/:id/send-results', (req, res) => {
+app.post('/api/assemblies/:id/send-results', async (req, res) => {
   try {
     const { recipientsType, subject, messageBody } = req.body;
     const result = store.sendAssemblyResultsEmails(
@@ -720,13 +781,44 @@ app.post('/api/assemblies/:id/send-results', (req, res) => {
       subject || 'Resultados Oficiales de la Asamblea',
       messageBody
     );
+
+    const assembly = store.getAssemblyById(req.params.id);
+    const votes = store.getVotesByAssembly(req.params.id);
+    const complex = store.getComplex();
+
+    // Trigger batch email dispatching in background
+    if (result.recipients && result.recipients.length > 0) {
+      const emailSubject = subject || `[VotoSmart] Resultados Oficiales y Escrutinio - ${assembly?.title || 'Asamblea'}`;
+      dispatchBatchEmails(
+        result.recipients.map((r: any) => ({ email: r.email, name: r.name })),
+        emailSubject,
+        (r) => `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #0f766e; margin: 0;">${complex.name}</h2>
+              <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Resultados Oficiales de Asamblea</p>
+            </div>
+            <p>Estimado(a) <strong>${r.name}</strong>,</p>
+            <p>Le notificamos el informe oficial de resultados y escrutinio correspondiente a: <strong>${assembly?.title || 'Asamblea'}</strong>.</p>
+            ${messageBody ? `<div style="background:#f8fafc; padding:12px; border-left:4px solid #0f766e; margin:16px 0;">${messageBody}</div>` : ''}
+            <div style="margin: 16px 0; padding: 12px; background: #f0fdfa; border-radius: 8px;">
+              <p style="margin:0; font-weight:bold; color:#0f766e;">Total votaciones computadas: ${votes.length}</p>
+              <p style="margin:4px 0 0; font-size:12px; color:#64748b;">Quórum alcanzado: ${assembly?.representedQuorum || 0}%</p>
+            </div>
+            <p style="font-size:12px; color:#94a3b8; text-align:center;">Generado conforme a la Ley 675 de 2001 por VotoSmart Colombia.</p>
+          </div>
+        `,
+        'resultados'
+      ).catch((err) => console.warn('[BatchEmail] Warning:', err.message));
+    }
+
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
-app.post('/api/assemblies/:id/send-minutes', (req, res) => {
+app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
   try {
     const { recipientsType, subject, messageBody } = req.body;
     const result = store.sendAssemblyMinutesEmails(
@@ -735,16 +827,42 @@ app.post('/api/assemblies/:id/send-minutes', (req, res) => {
       subject || 'Acta Oficial Aprobada de la Asamblea',
       messageBody
     );
+
+    const assembly = store.getAssemblyById(req.params.id);
+    const complex = store.getComplex();
+
+    // Trigger batch email dispatching in background
+    if (result.recipients && result.recipients.length > 0) {
+      const emailSubject = subject || `[VotoSmart] Acta Oficial y Decisiones Aprobadas - ${assembly?.title || 'Asamblea'}`;
+      dispatchBatchEmails(
+        result.recipients.map((r: any) => ({ email: r.email, name: r.name })),
+        emailSubject,
+        (r) => `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #0f766e; margin: 0;">${complex.name}</h2>
+              <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Acta Oficial de Asamblea</p>
+            </div>
+            <p>Estimado(a) <strong>${r.name}</strong>,</p>
+            <p>Se adjunta el acta formal con el registro de decisiones aprobadas para: <strong>${assembly?.title || 'Asamblea'}</strong>.</p>
+            ${messageBody ? `<div style="background:#f8fafc; padding:12px; border-left:4px solid #0f766e; margin:16px 0;">${messageBody}</div>` : ''}
+            <p style="font-size:12px; color:#94a3b8; text-align:center;">Generado conforme a la Ley 675 de 2001 por VotoSmart Colombia.</p>
+          </div>
+        `,
+        'acta'
+      ).catch((err) => console.warn('[BatchEmail] Warning:', err.message));
+    }
+
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// 12. Audit Logs
+// 12. Audit Logs (Isolated by Complex)
 app.get('/api/audit-logs', (req, res) => {
-  const { assemblyId } = req.query;
-  res.json(store.getAuditLogs(assemblyId as string));
+  const { assemblyId, complexId } = req.query;
+  res.json(store.getAuditLogs(assemblyId as string, complexId as string));
 });
 
 // 13. Demo Reset

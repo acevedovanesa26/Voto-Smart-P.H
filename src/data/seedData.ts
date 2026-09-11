@@ -14,6 +14,7 @@ import {
   VoteRecord,
   VoterParticipation
 } from '../types';
+import { createCandidateProposalPdfUri } from '../utils/pdfHelper';
 
 export const DEMO_COMPLEXES: ResidentialComplex[] = [
   {
@@ -228,6 +229,8 @@ export const DEMO_OWNERS: Owner[] = [
     apartment: 'Apto 401',
     coefficient: 8.5000,
     status: 'active',
+    isCouncilMember: true,
+    councilRole: 'Presidente del Consejo',
     createdAt: '2026-01-15T08:00:00Z'
   },
   {
@@ -242,6 +245,8 @@ export const DEMO_OWNERS: Owner[] = [
     apartment: 'Apto 201',
     coefficient: 7.5000,
     status: 'active',
+    isCouncilMember: true,
+    councilRole: 'Consejero Principal',
     createdAt: '2026-01-15T08:00:00Z'
   },
   {
@@ -543,6 +548,14 @@ export const DEMO_CANDIDATES: Candidate[] = [
     building: 'Torre B',
     profileSummary: 'Ingeniera Civil con 15 años de experiencia en infraestructura y mantenimiento.',
     proposals: '1. Plan preventivo de impermeabilizaciones y fachadas.\n2. Digitalización de la facturación y portería.\n3. Modernización de luminarias a tecnología LED solar en zonas comunes.',
+    proposalPdfUrl: createCandidateProposalPdfUri(
+      'Elena Gómez Restrepo',
+      'Apto 101 - Torre B',
+      'Consejo de Administración (Principal)',
+      '1. Plan preventivo de impermeabilizaciones y fachadas.\n2. Digitalización de la facturación y portería.\n3. Modernización de luminarias a tecnología LED solar en zonas comunes.'
+    ),
+    proposalPdfName: 'Propuesta_Elena_Gomez_Consejo_2026.pdf',
+    proposalPdfSize: 45200,
     experience: 'Ex-miembro del Consejo 2023, Líder del Comité de Convivencia.',
     photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
     status: 'active'
@@ -554,6 +567,14 @@ export const DEMO_CANDIDATES: Candidate[] = [
     building: 'Torre A',
     profileSummary: 'Administrador de Empresas y especialista en finanzas corporativas.',
     proposals: '1. Auditoría mensual de gastos comunes y cartera morosa.\n2. Fondo especial para renovación de ascensores sin cuotas extraordinarias gravosas.\n3. Negociación transparente de contratos de vigilancia.',
+    proposalPdfUrl: createCandidateProposalPdfUri(
+      'Andrés Felipe Silva',
+      'Apto 204 - Torre A',
+      'Consejo de Administración (Principal)',
+      '1. Auditoría mensual de gastos comunes y cartera morosa.\n2. Fondo especial para renovación de ascensores sin cuotas extraordinarias gravosas.\n3. Negociación transparente de contratos de vigilancia.'
+    ),
+    proposalPdfName: 'Propuesta_Andres_Silva_Consejo_2026.pdf',
+    proposalPdfSize: 48600,
     experience: '10 años en gerencia financiera, copropietario desde 2019.',
     photoUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80',
     status: 'active'
@@ -565,6 +586,14 @@ export const DEMO_CANDIDATES: Candidate[] = [
     building: 'Torre B',
     profileSummary: 'Abogada especialista en Derecho Inmobiliario y Propiedad Horizontal (Ley 675).',
     proposals: '1. Actualización y blindaje jurídico del Manual de Convivencia.\n2. Mediación efectiva de conflictos vecinales y tenencia responsable de mascotas.\n3. Cumplimiento estricto del Sistema de Gestión SST.',
+    proposalPdfUrl: createCandidateProposalPdfUri(
+      'Martha Cecilia Quintero',
+      'Apto 201 - Torre B',
+      'Consejo de Administración (Principal)',
+      '1. Actualización y blindaje jurídico del Manual de Convivencia.\n2. Mediación efectiva de conflictos vecinales y tenencia responsable de mascotas.\n3. Cumplimiento estricto del Sistema de Gestión SST.'
+    ),
+    proposalPdfName: 'Propuesta_Martha_Quintero_Consejo_2026.pdf',
+    proposalPdfSize: 52100,
     experience: 'Asesora legal de copropiedades y actual Secretaria Ad-hoc.',
     photoUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80',
     status: 'active'
@@ -576,6 +605,14 @@ export const DEMO_CANDIDATES: Candidate[] = [
     building: 'Torre A',
     profileSummary: 'Arquitecto y docente universitario, enfocado en urbanismo y áreas verdes.',
     proposals: '1. Remodelación del parque infantil y zonas de esparcimiento familiar.\n2. Sistema de reciclaje eficiente y aprovechamiento de aguas lluvias.\n3. Adecuación de accesibilidad para personas mayores.',
+    proposalPdfUrl: createCandidateProposalPdfUri(
+      'Roberto Domínguez Silva',
+      'Apto 501 - Torre A',
+      'Consejo de Administración (Principal)',
+      '1. Remodelación del parque infantil y zonas de esparcimiento familiar.\n2. Sistema de reciclaje eficiente y aprovechamiento de aguas lluvias.\n3. Adecuación de accesibilidad para personas mayores.'
+    ),
+    proposalPdfName: 'Propuesta_Roberto_Dominguez_Consejo_2026.pdf',
+    proposalPdfSize: 46800,
     experience: 'Diseñador de proyectos sostenibles, copropietario fundador.',
     photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
     status: 'active'

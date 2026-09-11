@@ -37,6 +37,9 @@ interface PasswordResetRequest {
   email: string;
   code: string;
   createdAt: number;
+  expiresAt: number;
+  used: boolean;
+  verified: boolean;
 }
 
 class DataStore {
@@ -74,6 +77,10 @@ class DataStore {
 
   getComplex() {
     return this.complex;
+  }
+
+  getComplexById(id: string) {
+    return this.complexes.find((c) => c.id === id);
   }
 
   switchComplex(complexId: string) {
@@ -259,11 +266,15 @@ class DataStore {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     
     // Store OTP
+    const createdAt = Date.now();
     this.resetRequests = this.resetRequests.filter((r) => r.email.toLowerCase() !== email.toLowerCase());
     this.resetRequests.push({
       email: email.toLowerCase(),
       code,
-      createdAt: Date.now()
+      createdAt,
+      expiresAt: createdAt + 15 * 60 * 1000,
+      used: false,
+      verified: false
     });
 
     // Record email log
@@ -676,33 +687,79 @@ class DataStore {
 
   // Password Recovery Flow
   requestPasswordReset(email: string) {
-    const user = this.getUserByEmail(email);
-    if (!user) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      throw new Error('El correo electrónico es obligatorio.');
+    }
+
+    let user = this.getUserByEmail(cleanEmail);
+    const owner = this.owners.find((o) => o.email.toLowerCase() === cleanEmail);
+
+    if (!user && !owner) {
       throw new Error('No existe ninguna cuenta registrada con el correo ingresado.');
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits e.g. 582910
-    this.resetRequests = this.resetRequests.filter((r) => r.email.toLowerCase() !== email.toLowerCase());
+    // If owner exists but user account not materialized yet, create it
+    if (!user && owner) {
+      user = {
+        id: `user-${owner.id}`,
+        name: owner.name,
+        email: owner.email,
+        role: 'owner',
+        phone: owner.phone,
+        documentType: owner.documentType,
+        documentNumber: owner.documentNumber,
+        apartment: owner.apartment,
+        building: owner.building,
+        coefficient: owner.coefficient,
+        status: 'active',
+        complexId: owner.complexId,
+        createdAt: new Date().toISOString()
+      };
+      this.users.push(user);
+    }
+
+    // Cooldown check: prevent rapid resend abuse (minimum 30 seconds wait)
+    const existingReq = this.resetRequests.find(r => r.email === cleanEmail && !r.used);
+    if (existingReq && (Date.now() - existingReq.createdAt) < 30000) {
+      const waitSec = Math.ceil((30000 - (Date.now() - existingReq.createdAt)) / 1000);
+      throw new Error(`Por favor espera ${waitSec} segundos antes de solicitar un nuevo código.`);
+    }
+
+    // Invalidate any existing unused codes for this email
+    this.resetRequests.forEach((r) => {
+      if (r.email === cleanEmail) {
+        r.used = true;
+      }
+    });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
+    const createdAt = Date.now();
+    const expiresAt = createdAt + 10 * 60 * 1000; // 10 minutes validity
+
     this.resetRequests.push({
-      email: email.toLowerCase(),
+      email: cleanEmail,
       code,
-      createdAt: Date.now()
+      createdAt,
+      expiresAt,
+      used: false,
+      verified: false
     });
 
     const timestamp = new Date().toISOString();
     this.emailLogs.unshift({
       id: `email-${Date.now()}`,
       assemblyId: this.assemblies[0]?.id || 'system',
-      recipientEmail: email,
-      recipientName: user?.name || 'Usuario',
+      recipientEmail: cleanEmail,
+      recipientName: user?.name || owner?.name || 'Usuario',
       subject: `Código de Recuperación de Contraseña VotoSmart: ${code}`,
       type: 'password_reset',
       status: 'sent',
       sentAt: timestamp
     });
 
-    // Mask email
-    const [userPart, domainPart] = email.split('@');
+    // Mask email for privacy
+    const [userPart, domainPart] = cleanEmail.split('@');
     const maskedUser = userPart.length > 2 
       ? `${userPart[0]}***${userPart[userPart.length - 1]}` 
       : `${userPart[0]}***`;
@@ -711,10 +768,11 @@ class DataStore {
     return {
       success: true,
       code,
-      email,
+      email: cleanEmail,
       maskedEmail,
-      userName: user.name,
-      message: `Hemos generado y enviado un código de seguridad de 6 dígitos a su correo (${maskedEmail}). Revisa tu bandeja de entrada o buzón.`
+      userName: user?.name || owner?.name || 'Usuario',
+      expiresInMinutes: 10,
+      message: 'Código enviado correctamente'
     };
   }
 
@@ -723,48 +781,100 @@ class DataStore {
   }
 
   verifyResetCode(email: string, code: string) {
-    const req = this.resetRequests.find(
-      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === code.trim()
-    );
-    if (!req) {
-      throw new Error('Código de verificación incorrecto o expirado.');
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanCode = (code || '').trim().replace(/\D/g, '');
+
+    if (!cleanEmail || !cleanCode) {
+      throw new Error('El código no es válido');
     }
-    return { valid: true };
+
+    const req = this.resetRequests
+      .filter((r) => r.email === cleanEmail && !r.used)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+
+    if (!req) {
+      throw new Error('El código no es válido');
+    }
+
+    if (Date.now() > req.expiresAt) {
+      req.used = true;
+      throw new Error('El código ha vencido');
+    }
+
+    if (req.code !== cleanCode) {
+      throw new Error('El código no es válido');
+    }
+
+    req.verified = true;
+    return { valid: true, message: 'Código verificado con éxito.' };
   }
 
   resetPassword(email: string, code: string, newPassword?: string) {
-    this.verifyResetCode(email, code);
-    // Remove used code
-    this.resetRequests = this.resetRequests.filter((r) => r.email.toLowerCase() !== email.toLowerCase());
-    if (newPassword) {
-      this.userPasswords.set(email.toLowerCase(), newPassword.trim());
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanCode = (code || '').trim().replace(/\D/g, '');
+
+    const req = this.resetRequests
+      .filter((r) => r.email === cleanEmail && !r.used)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+
+    if (!req) {
+      throw new Error('El código no es válido');
     }
-    const user = this.getUserByEmail(email);
+
+    if (Date.now() > req.expiresAt) {
+      req.used = true;
+      throw new Error('El código ha vencido');
+    }
+
+    if (req.code !== cleanCode) {
+      throw new Error('El código no es válido');
+    }
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      throw new Error('La nueva contraseña debe tener al menos 6 caracteres.');
+    }
+
+    // Invalidate code so it can NEVER be reused
+    req.used = true;
+
+    this.userPasswords.set(cleanEmail, newPassword.trim());
+
+    const user = this.getUserByEmail(cleanEmail);
     if (user) {
       this.addAuditLog(user.id, user.name, user.role, 'CAMBIO_CONTRASEÑA', `Restablecimiento exitoso de contraseña para ${user.email}`);
     }
+
     return {
       success: true,
       message: 'Contraseña restablecida exitosamente. Ya puede iniciar sesión.'
     };
   }
 
-  // Owners
-  getOwners() {
-    return this.owners;
+  // Owners - Multi-Complex Isolation
+  getOwners(complexId?: string): Owner[] {
+    const targetId = complexId || this.complex?.id;
+    if (!targetId || targetId === 'all') {
+      return this.owners;
+    }
+    return this.owners.filter((o) => o.complexId === targetId);
   }
 
-  addOwner(ownerData: Omit<Owner, 'id' | 'complexId' | 'createdAt'>) {
+  getOwnerById(id: string): Owner | undefined {
+    return this.owners.find((o) => o.id === id);
+  }
+
+  addOwner(ownerData: Omit<Owner, 'id' | 'createdAt'> & { complexId?: string }, explicitComplexId?: string) {
     const id = `owner-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const targetComplexId = explicitComplexId || ownerData.complexId || this.complex.id;
     const newOwner: Owner = {
       id,
-      complexId: this.complex.id,
+      complexId: targetComplexId,
       ...ownerData,
       createdAt: new Date().toISOString()
     };
     this.owners.push(newOwner);
 
-    // Also register user for voting
+    // Also register user for voting scoped to this complex
     const newUser: User = {
       id: `user-${id}`,
       name: newOwner.name,
@@ -777,12 +887,12 @@ class DataStore {
       building: newOwner.building,
       coefficient: newOwner.coefficient,
       status: 'active',
-      complexId: this.complex.id,
+      complexId: targetComplexId,
       createdAt: new Date().toISOString()
     };
     this.users.push(newUser);
 
-    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'REGISTRO_PROPIETARIO', `Registro de propietario ${newOwner.name} (${newOwner.apartment})`);
+    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'REGISTRO_PROPIETARIO', `Registro de propietario ${newOwner.name} (${newOwner.apartment}) en ${this.complex.name}`);
     return newOwner;
   }
 
@@ -832,14 +942,39 @@ class DataStore {
     return updated;
   }
 
-  importOwnersBatch(importedOwners: Omit<Owner, 'id' | 'complexId' | 'createdAt'>[]) {
+  // Council of Administration Membership Management
+  toggleCouncilMember(ownerId: string, isCouncilMember: boolean, councilRole?: string) {
+    const owner = this.owners.find((o) => o.id === ownerId);
+    if (!owner) throw new Error('Copropietario no encontrado');
+
+    owner.isCouncilMember = isCouncilMember;
+    owner.councilRole = isCouncilMember ? (councilRole || 'Consejero Principal') : undefined;
+
+    this.addAuditLog(
+      'user-admin',
+      'Administración',
+      'admin',
+      'GESTION_CONSEJO',
+      `${isCouncilMember ? 'Designación' : 'Retiro'} de ${owner.name} (${owner.building} - ${owner.apartment}) como miembro del Consejo de Administración`
+    );
+
+    return owner;
+  }
+
+  getCouncilMembers(complexId?: string): Owner[] {
+    const targetId = complexId || this.complex?.id;
+    return this.getOwners(targetId).filter((o) => o.isCouncilMember && o.status === 'active');
+  }
+
+  importOwnersBatch(importedOwners: Omit<Owner, 'id' | 'complexId' | 'createdAt'>[], complexId?: string) {
     let successCount = 0;
+    const targetComplexId = complexId || this.complex.id;
     for (const data of importedOwners) {
-      this.addOwner(data);
+      this.addOwner({ ...data, complexId: targetComplexId });
       successCount++;
     }
-    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'IMPORTACION_MASIVA_EXCEL', `Importación exitosa de ${successCount} propietarios`);
-    return { successCount, total: this.owners.length };
+    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'IMPORTACION_MASIVA_EXCEL', `Importación exitosa de ${successCount} propietarios en ${this.complex.name}`);
+    return { successCount, total: this.getOwners(targetComplexId).length };
   }
 
   deleteOwner(id: string) {
@@ -867,9 +1002,9 @@ class DataStore {
     return true;
   }
 
-  deleteOwnersBatch(ids: string[]) {
+  deleteOwnersBatch(ids: string[], complexId?: string) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      return { deletedCount: 0, total: this.owners.length };
+      return { deletedCount: 0, total: this.getOwners(complexId).length };
     }
     const idsSet = new Set(ids);
     const toDelete = this.owners.filter((o) => idsSet.has(o.id));
@@ -895,12 +1030,16 @@ class DataStore {
       `Eliminación masiva de ${toDelete.length} copropietarios del censo`
     );
 
-    return { deletedCount: toDelete.length, total: this.owners.length };
+    return { deletedCount: toDelete.length, total: this.getOwners(complexId).length };
   }
 
-  // Assemblies
-  getAssemblies() {
-    return this.assemblies;
+  // Assemblies - Multi-Complex Isolation
+  getAssemblies(complexId?: string): Assembly[] {
+    const targetId = complexId || this.complex?.id;
+    if (!targetId || targetId === 'all') {
+      return this.assemblies;
+    }
+    return this.assemblies.filter((a) => a.complexId === targetId);
   }
 
   getAssemblyById(id: string) {
@@ -909,9 +1048,10 @@ class DataStore {
 
   createAssembly(data: Omit<Assembly, 'id' | 'complexId' | 'createdAt' | 'representedQuorum' | 'checkedInOwnersCount'>) {
     const id = `assembly-${Date.now()}`;
+    const targetComplexId = this.complex.id;
     const newAssembly: Assembly = {
       id,
-      complexId: this.complex.id,
+      complexId: targetComplexId,
       ...data,
       representedQuorum: 0,
       checkedInOwnersCount: 0,
@@ -919,8 +1059,9 @@ class DataStore {
     };
     this.assemblies.unshift(newAssembly);
 
-    // Initialize Quorum list with all active owners
-    this.owners.forEach((o) => {
+    // Initialize Quorum list ONLY with active owners of THIS complex
+    const complexOwners = this.getOwners(targetComplexId);
+    complexOwners.forEach((o) => {
       this.quorum.push({
         id: `quorum-${id}-${o.id}`,
         assemblyId: id,
@@ -933,7 +1074,7 @@ class DataStore {
       });
     });
 
-    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'CREACIÓN_ASAMBLEA', `Creación de ${newAssembly.title}`);
+    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'CREACIÓN_ASAMBLEA', `Creación de ${newAssembly.title} en ${this.complex.name}`);
     return newAssembly;
   }
 
@@ -1025,16 +1166,135 @@ class DataStore {
     return this.votes.find((v) => v.id === id);
   }
 
+  // Granular Filter Evaluation: returns eligible owners for a vote configuration
+  getEligibleVotersForVoteConfig(complexId: string, filterConfig?: any): Owner[] {
+    const activeOwners = this.getOwners(complexId).filter((o) => o.status === 'active');
+    if (!filterConfig) {
+      return activeOwners;
+    }
+    const type = filterConfig.targetAudience || filterConfig.filterType || 'all';
+
+    if (type === 'all') {
+      return activeOwners;
+    }
+    if (type === 'council_only' || filterConfig.councilOnly) {
+      return activeOwners.filter((o) => !!o.isCouncilMember);
+    }
+    if (type === 'specific_towers' || type === 'by_tower') {
+      const towers = filterConfig.allowedTowers || [];
+      return activeOwners.filter((o) => towers.includes(o.building || 'Torre Principal'));
+    }
+    if (type === 'towers_and_council' || type === 'tower_and_council') {
+      const towers = filterConfig.allowedTowers || [];
+      return activeOwners.filter((o) => !!o.isCouncilMember || towers.includes(o.building || 'Torre Principal'));
+    }
+    if (type === 'custom' || type === 'specific_owners') {
+      const allowedIds = filterConfig.allowedOwnerIds || [];
+      return activeOwners.filter((o) => allowedIds.includes(o.id));
+    }
+    return activeOwners;
+  }
+
+  getEligibleVotersForVote(voteId: string): Owner[] {
+    const vote = this.votes.find((v) => v.id === voteId);
+    if (!vote) return [];
+    const assembly = this.assemblies.find((a) => a.id === vote.assemblyId);
+    const complexId = assembly?.complexId || this.complex.id;
+    return this.getEligibleVotersForVoteConfig(complexId, vote.filterConfig);
+  }
+
+  isVoterEligibleForVote(
+    voteId: string,
+    voterUserId: string,
+    documentNumber?: string
+  ): { eligible: boolean; reason?: string; owner?: Owner } {
+    const vote = this.votes.find((v) => v.id === voteId);
+    if (!vote) return { eligible: false, reason: 'La votación no existe.' };
+    const assembly = this.assemblies.find((a) => a.id === vote.assemblyId);
+    if (!assembly) return { eligible: false, reason: 'La asamblea asociada no existe.' };
+
+    const complexOwners = this.getOwners(assembly.complexId);
+    const cleanDoc = (documentNumber || '').trim();
+    const cleanId = (voterUserId || '').replace('user-', '');
+
+    const owner = complexOwners.find(
+      (o) => o.id === voterUserId || o.id === cleanId || (cleanDoc && o.documentNumber === cleanDoc)
+    );
+
+    if (!owner) {
+      return {
+        eligible: false,
+        reason: 'No perteneces al censo de copropietarios del conjunto residencial de esta votación.'
+      };
+    }
+
+    if (owner.status !== 'active') {
+      return {
+        eligible: false,
+        reason: 'Tu registro de copropietario se encuentra inactivo.'
+      };
+    }
+
+    // Filter verification
+    const eligibleList = this.getEligibleVotersForVote(voteId);
+    const isIncluded = eligibleList.some((o) => o.id === owner.id);
+
+    if (!isIncluded) {
+      const type = vote.filterConfig?.targetAudience || vote.filterConfig?.filterType;
+      if (type === 'council_only' || vote.filterConfig?.councilOnly) {
+        return {
+          eligible: false,
+          reason: 'Esta votación está restringida exclusivamente a los miembros del Consejo de Administración.'
+        };
+      }
+      if (type === 'specific_towers' || type === 'by_tower') {
+        return {
+          eligible: false,
+          reason: `Esta votación está habilitada únicamente para las torres: ${vote.filterConfig?.allowedTowers?.join(', ')}. Su inmueble pertenece a: ${owner.building || 'otra torre'}.`
+        };
+      }
+      if (type === 'towers_and_council' || type === 'tower_and_council') {
+        return {
+          eligible: false,
+          reason: `Esta votación requiere pertenecer a las torres autorizadas (${vote.filterConfig?.allowedTowers?.join(', ')}) o ser miembro del Consejo de Administración.`
+        };
+      }
+      if (type === 'custom' || type === 'specific_owners') {
+        return {
+          eligible: false,
+          reason: 'No se encuentra en la lista de copropietarios autorizados para votar en este punto.'
+        };
+      }
+      return {
+        eligible: false,
+        reason: 'No estás habilitado para participar en esta votación.'
+      };
+    }
+
+    return { eligible: true, owner };
+  }
+
   createVote(data: Omit<Vote, 'id' | 'status' | 'startedAt' | 'closedAt' | 'closedBy'>) {
     const id = `vote-${Date.now()}`;
+    const assembly = this.assemblies.find((a) => a.id === data.assemblyId);
+    const complexId = assembly?.complexId || this.complex.id;
+    const eligibleVoters = this.getEligibleVotersForVoteConfig(complexId, data.filterConfig);
+
     const newVote: Vote = {
       id,
       ...data,
       status: 'scheduled',
-      totalVoters: this.owners.length
+      eligibleVotersCount: eligibleVoters.length,
+      totalVoters: eligibleVoters.length
     };
     this.votes.push(newVote);
-    this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'CREACIÓN_VOTACIÓN', `Creación de votación: "${newVote.title}" (${newVote.type})`);
+    this.addAuditLog(
+      'user-admin',
+      'Carolina Méndez',
+      'admin',
+      'CREACIÓN_VOTACIÓN',
+      `Creación de votación: "${newVote.title}" (${newVote.type}, Filtro: ${data.filterConfig?.filterType || 'general'}, Habilitados: ${eligibleVoters.length})`
+    );
     return newVote;
   }
 
@@ -1071,7 +1331,101 @@ class DataStore {
     return { vote, results };
   }
 
-  // Cast Vote with strict Duplicate Prevention
+  updateVote(id: string, updateData: Partial<Vote>, updatedBy: string = 'Carolina Méndez Rojas') {
+    const idx = this.votes.findIndex((v) => v.id === id);
+    if (idx === -1) throw new Error('Votación no encontrada');
+
+    const existing = this.votes[idx];
+    const assembly = this.assemblies.find((a) => a.id === existing.assemblyId);
+    const complexId = assembly?.complexId || this.complex.id;
+
+    // Recalculate eligible voters if filterConfig changed
+    let eligibleCount = existing.eligibleVotersCount;
+    if (updateData.filterConfig) {
+      const eligibleList = this.getEligibleVotersForVoteConfig(complexId, updateData.filterConfig);
+      eligibleCount = eligibleList.length;
+    }
+
+    const updated: Vote = {
+      ...existing,
+      ...updateData,
+      id: existing.id,
+      assemblyId: existing.assemblyId,
+      eligibleVotersCount: eligibleCount ?? existing.eligibleVotersCount,
+      totalVoters: eligibleCount ?? existing.totalVoters
+    };
+
+    this.votes[idx] = updated;
+    this.notifyChange();
+
+    this.addAuditLog(
+      'user-admin',
+      updatedBy,
+      'admin',
+      'MODIFICACIÓN_VOTACIÓN',
+      `Modificación de votación: "${updated.title}" (${updated.type}, Opciones: ${updated.options?.length || 0})`,
+      existing.assemblyId,
+      complexId
+    );
+
+    return updated;
+  }
+
+  deleteVote(id: string, deletedBy: string = 'Carolina Méndez Rojas') {
+    const vote = this.votes.find((v) => v.id === id);
+    if (!vote) throw new Error('Votación no encontrada');
+
+    const assembly = this.assemblies.find((a) => a.id === vote.assemblyId);
+    const complexId = assembly?.complexId || this.complex.id;
+
+    // Remove vote records
+    this.voteRecords = this.voteRecords.filter((r) => r.voteId !== id);
+    this.votes = this.votes.filter((v) => v.id !== id);
+    this.notifyChange();
+
+    this.addAuditLog(
+      'user-admin',
+      deletedBy,
+      'admin',
+      'ELIMINACIÓN_VOTACIÓN',
+      `Eliminación definitiva de votación: "${vote.title}"`,
+      vote.assemblyId,
+      complexId
+    );
+
+    return { success: true, deletedVoteId: id };
+  }
+
+  resetVote(id: string, resetBy: string = 'Carolina Méndez Rojas') {
+    const vote = this.votes.find((v) => v.id === id);
+    if (!vote) throw new Error('Votación no encontrada');
+
+    const assembly = this.assemblies.find((a) => a.id === vote.assemblyId);
+    const complexId = assembly?.complexId || this.complex.id;
+
+    vote.status = 'scheduled';
+    delete vote.startedAt;
+    delete vote.closedAt;
+    delete vote.closedBy;
+
+    // Clear previous vote records
+    this.voteRecords = this.voteRecords.filter((r) => r.voteId !== id);
+    this.notifyChange();
+
+    this.addAuditLog(
+      'user-admin',
+      resetBy,
+      'admin',
+      'REINICIO_VOTACIÓN',
+      `Reinicio de votación a estado programado: "${vote.title}" (se anulan los registros previos)`,
+      vote.assemblyId,
+      complexId
+    );
+
+    return vote;
+  }
+
+  // Cast Vote with strict Duplicate Prevention & Backend Filter Validation
   castVote(
     voteId: string,
     voterUserId: string,
@@ -1093,6 +1447,12 @@ class DataStore {
     }
     if (selectedOptionIds.length > vote.maxSelections) {
       throw new Error(`Máximo ${vote.maxSelections} opción(es) permitida(s).`);
+    }
+
+    // Strict Backend Eligibility Check (Filters, Complex Isolation, Active Account)
+    const eligibility = this.isVoterEligibleForVote(voteId, voterUserId, voterDocument);
+    if (!eligibility.eligible) {
+      throw new Error(eligibility.reason || 'No estás habilitado para participar en esta votación.');
     }
 
     // 1. Strict Duplicate Check on participation table
@@ -1315,10 +1675,22 @@ class DataStore {
     const assembly = this.assemblies.find((a) => a.id === assemblyId);
     if (!assembly) throw new Error('Asamblea no encontrada');
 
-    let targetOwners = this.owners;
+    // Strictly isolate by assembly's complex
+    const complexOwners = this.getOwners(assembly.complexId).filter(o => o.status === 'active');
+    let targetOwners = complexOwners;
+
     if (recipientsType === 'attended') {
-      const attendedIds = this.quorum.filter((q) => q.assemblyId === assemblyId && q.checkedIn).map((q) => q.ownerId);
-      targetOwners = this.owners.filter((o) => attendedIds.includes(o.id));
+      const attendedIds = new Set(
+        this.quorum.filter((q) => q.assemblyId === assemblyId && q.checkedIn).map((q) => q.ownerId)
+      );
+      targetOwners = complexOwners.filter((o) => attendedIds.has(o.id));
+    } else if (recipientsType === 'voted') {
+      const votedParts = this.participations.filter((p) => p.assemblyId === assemblyId);
+      const votedIds = new Set(votedParts.map((p) => p.voterUserId));
+      const votedDocs = new Set(votedParts.map((p) => p.voterDocument));
+      targetOwners = complexOwners.filter(
+        (o) => votedIds.has(o.id) || votedIds.has(`user-${o.id}`) || votedDocs.has(o.documentNumber)
+      );
     }
 
     const sentCount = targetOwners.length;
@@ -1342,9 +1714,9 @@ class DataStore {
       'Carolina Méndez',
       'admin',
       'ENVÍO_CORREOS_RESULTADOS',
-      `Envío de resultados oficiales por correo electrónico a ${sentCount} copropietarios (${recipientsType === 'all' ? '100% del censo' : 'asistentes'}).`
+      `Envío de resultados oficiales por correo electrónico a ${sentCount} copropietarios de ${this.complex.name} (${recipientsType === 'all' ? '100% del censo' : recipientsType === 'attended' ? 'asistentes' : 'votantes'}).`
     );
-    return { success: true, sentCount, total: this.owners.length, target: recipientsType };
+    return { success: true, sentCount, total: complexOwners.length, target: recipientsType, recipients: targetOwners };
   }
 
   sendAssemblyMinutesEmails(
@@ -1356,10 +1728,22 @@ class DataStore {
     const assembly = this.assemblies.find((a) => a.id === assemblyId);
     if (!assembly) throw new Error('Asamblea no encontrada');
 
-    let targetOwners = this.owners;
+    // Strictly isolate by assembly's complex
+    const complexOwners = this.getOwners(assembly.complexId).filter(o => o.status === 'active');
+    let targetOwners = complexOwners;
+
     if (recipientsType === 'attended') {
-      const attendedIds = this.quorum.filter((q) => q.assemblyId === assemblyId && q.checkedIn).map((q) => q.ownerId);
-      targetOwners = this.owners.filter((o) => attendedIds.includes(o.id));
+      const attendedIds = new Set(
+        this.quorum.filter((q) => q.assemblyId === assemblyId && q.checkedIn).map((q) => q.ownerId)
+      );
+      targetOwners = complexOwners.filter((o) => attendedIds.has(o.id));
+    } else if (recipientsType === 'voted') {
+      const votedParts = this.participations.filter((p) => p.assemblyId === assemblyId);
+      const votedIds = new Set(votedParts.map((p) => p.voterUserId));
+      const votedDocs = new Set(votedParts.map((p) => p.voterDocument));
+      targetOwners = complexOwners.filter(
+        (o) => votedIds.has(o.id) || votedIds.has(`user-${o.id}`) || votedDocs.has(o.documentNumber)
+      );
     }
 
     const sentCount = targetOwners.length;
@@ -1385,20 +1769,54 @@ class DataStore {
       'ENVÍO_CORREOS_ACTA',
       `Envío de Acta Oficial aprobada a ${sentCount} copropietarios (${recipientsType === 'all' ? '100% del censo' : 'asistentes'}).`
     );
-    return { success: true, sentCount, total: this.owners.length, target: recipientsType };
+    return { success: true, sentCount, total: complexOwners.length, target: recipientsType, recipients: targetOwners };
   }
 
-  // Audit Logs
-  getAuditLogs(assemblyId?: string) {
-    if (assemblyId) {
-      return this.auditLogs.filter((a) => a.assemblyId === assemblyId);
+  // Audit Logs - Isolated by Complex
+  getAuditLogs(assemblyId?: string, complexId?: string) {
+    let logs = this.auditLogs;
+    if (complexId) {
+      logs = logs.filter((a) => {
+        if (a.complexId) return a.complexId === complexId;
+        if (a.assemblyId) {
+          const asm = this.assemblies.find(asm => asm.id === a.assemblyId);
+          return asm?.complexId === complexId;
+        }
+        return complexId === this.complex.id;
+      });
     }
-    return this.auditLogs;
+    if (assemblyId) {
+      logs = logs.filter((a) => a.assemblyId === assemblyId);
+    }
+    return logs;
   }
 
-  addAuditLog(userId: string, userName: string, userRole: string, action: string, details: string, assemblyId?: string) {
+  addAuditLog(
+    userId: string,
+    userName: string,
+    userRole: string,
+    action: string,
+    details: string,
+    assemblyId?: string,
+    complexId?: string
+  ) {
+    // Resolve complexId
+    let resolvedComplexId = complexId;
+    if (!resolvedComplexId && assemblyId) {
+      const asm = this.assemblies.find(a => a.id === assemblyId);
+      resolvedComplexId = asm?.complexId;
+    }
+    if (!resolvedComplexId && userId) {
+      const u = this.users.find(u => u.id === userId);
+      resolvedComplexId = u?.complexId;
+    }
+    if (!resolvedComplexId) {
+      resolvedComplexId = this.complex.id;
+    }
+
     const log: AuditLog = {
       id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      complexId: resolvedComplexId,
       assemblyId,
       userId,
       userName,
