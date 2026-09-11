@@ -2,20 +2,23 @@ import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api } from '../../services/api';
 import { Alert, Button, Modal } from '../common/UIComponents';
+import { PasswordStrengthIndicator, validatePasswordPolicy } from './PasswordStrengthIndicator';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBackToLogin: () => void;
+  initialIdentifier?: string;
 }
 
 export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   isOpen,
   onClose,
-  onBackToLogin
+  onBackToLogin,
+  initialIdentifier = ''
 }) => {
   const [step, setStep] = useState<'email' | 'code' | 'success'>('email');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(initialIdentifier);
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -26,17 +29,24 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
+  // Sync initial identifier if provided
+  React.useEffect(() => {
+    if (initialIdentifier && !identifier) {
+      setIdentifier(initialIdentifier);
+    }
+  }, [initialIdentifier]);
+
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) {
-      setError('Por favor ingrese su correo electrónico registrado.');
+    if (!identifier.trim()) {
+      setError('Por favor ingrese su correo electrónico o número de cédula.');
       return;
     }
     setIsLoading(true);
     setError(null);
     try {
-      const res = await api.forgotPassword(email);
-      setInfoMessage(res.message || `Hemos enviado un código de 6 dígitos al correo ${email}. Revisa tu bandeja de entrada o spam.`);
+      const res = await api.forgotPassword(identifier.trim());
+      setInfoMessage(res.message || `Hemos enviado un código de seguridad de 6 dígitos a su correo electrónico. Revisa tu bandeja de entrada o spam.`);
       setStep('code');
     } catch (err: any) {
       setError(err.message || 'Error al procesar la solicitud');
@@ -51,8 +61,9 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       setError('Por favor ingrese el código de 6 dígitos.');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('La nueva contraseña debe tener mínimo 6 caracteres.');
+    const validation = validatePasswordPolicy(newPassword);
+    if (!validation.isValid) {
+      setError(validation.errorMessage || 'La nueva contraseña no cumple con los requisitos mínimos de seguridad.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -63,7 +74,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      await api.resetPassword(email, code, newPassword);
+      await api.resetPassword(identifier.trim(), code.trim(), newPassword);
       setStep('success');
     } catch (err: any) {
       setError(err.message || 'Código incorrecto o expirado.');
@@ -74,7 +85,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
   const resetAll = () => {
     setStep('email');
-    setEmail('');
+    setIdentifier('');
     setCode('');
     setNewPassword('');
     setConfirmPassword('');
@@ -98,24 +109,27 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         {step === 'email' && (
           <form onSubmit={handleSendEmail} className="space-y-4">
             <p className="text-slate-600 leading-relaxed">
-              Ingresa el correo electrónico asociado a tu cuenta de copropietario o administrador. Te enviaremos un código de seguridad de 6 dígitos para restablecer tu contraseña.
+              Ingresa el <strong>correo electrónico</strong> o tu <strong>número de cédula</strong> registrado en la copropiedad. Te enviaremos un código de seguridad de 6 dígitos a tu correo verificado para restablecer tu contraseña.
             </p>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                Correo Electrónico
+                Cédula o Correo Electrónico
               </label>
               <div className="relative">
                 <Mail className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ejemplo@correo.com"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="Ej: 1020304050 o tu@correo.com"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-sm font-medium text-slate-900 bg-white"
                 />
               </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Acepta tu número de cédula o el correo que tienes registrado en la administración.
+              </p>
             </div>
 
             <div className="flex gap-2.5 pt-2">
@@ -161,7 +175,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 className="w-full px-3 py-2 text-center text-lg tracking-widest font-mono font-bold rounded-xl border border-slate-300 text-slate-900 bg-white"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Ingresa el código que recibiste en tu correo electrónico.
+                Ingresa el código que acabamos de enviar a tu correo electrónico registrado.
               </p>
             </div>
 
@@ -214,6 +228,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </div>
             </div>
 
+            {/* Password Strength Indicator */}
+            {newPassword && (
+              <PasswordStrengthIndicator password={newPassword} />
+            )}
+
             <div className="flex gap-2.5 pt-2">
               <Button
                 type="button"
@@ -221,7 +240,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 className="w-1/2"
                 onClick={() => setStep('email')}
               >
-                Cambiar Correo
+                Volver
               </Button>
               <Button
                 type="submit"

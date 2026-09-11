@@ -3,7 +3,7 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
-import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails } from './server/emailService';
+import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
@@ -54,12 +54,13 @@ app.post('/api/db/sync', async (req, res) => {
 // 2. Auth
 app.post('/api/auth/login', (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'El correo electrónico es requerido' });
+    const identifier = req.body.email || req.body.identifier || req.body.documentNumber || req.body.cedula;
+    const { password } = req.body;
+    if (!identifier) {
+      return res.status(400).json({ error: 'El correo electrónico o número de cédula es requerido' });
     }
 
-    const user = store.validateUserCredentials(email, password);
+    const user = store.validateUserCredentials(identifier, password);
     const complex = store.getComplex();
     res.json({
       user,
@@ -89,31 +90,135 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+// Voter Status Check (Determine if voter exists in census and if password is set)
+app.post('/api/auth/voter/check-status', (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'El correo electrónico es obligatorio' });
+    const documentNumber = req.body.documentNumber || req.body.documentId || req.body.cedula || req.body.identifier;
+    if (!documentNumber) {
+      return res.status(400).json({ error: 'El número de cédula o documento es requerido.' });
     }
-    const result = store.requestPasswordReset(email);
-    
-    // Dispatch real/sandbox email
+    const status = store.checkVoterStatus(documentNumber);
+    res.json({
+      success: true,
+      exists: status.exists,
+      hasPassword: status.hasPassword,
+      name: status.name,
+      maskedEmail: status.maskedEmail,
+      documentNumber: status.documentNumber,
+      apartment: status.apartment,
+      building: status.building,
+      coefficient: status.coefficient
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Voter Activation: Request 6-digit verification code to email for registering new password
+app.post('/api/auth/voter/request-activation', async (req, res) => {
+  try {
+    const documentNumber = req.body.documentNumber || req.body.documentId || req.body.cedula;
+    if (!documentNumber) {
+      return res.status(400).json({ error: 'El número de cédula o documento es requerido' });
+    }
+    const result = store.requestVoterActivation(documentNumber);
+    const code = result.code;
+
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
         <div style="text-align: center; margin-bottom: 24px;">
           <h2 style="color: #0f766e; margin: 0; font-size: 24px;">VotoSmart Colombia</h2>
-          <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Plataforma de Asambleas y Votaciones Digitales PH</p>
+          <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Activación de Cuenta y Creación de Contraseña</p>
+        </div>
+        <div style="background: #f0fdfa; border: 1px solid #99f6e4; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+          <p style="margin: 0 0 8px; font-size: 14px; color: #134e4a; font-weight: bold;">Tu Código de Verificación para Registrar Contraseña</p>
+          <div style="font-size: 34px; font-weight: 900; letter-spacing: 6px; color: #0f766e; font-family: monospace; padding: 12px; background: #ffffff; border-radius: 8px; display: inline-block; border: 2px dashed #0d9488;">
+            ${code}
+          </div>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #0f766e;">Válido por 15 minutos para ${store.getComplex().name}</p>
+        </div>
+        <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+          Estimado(a) copropietario(a) <strong>${result.name}</strong> (${result.building} ${result.apartment}),<br>
+          Has iniciado la activación de tu cuenta de votante con documento <strong>${result.documentNumber}</strong>.<br>
+          Ingresa este código de 6 dígitos en la aplicación para crear tu contraseña segura.
+        </p>
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center;">
+          Seguridad criptográfica conforme a Ley 675 de 2001 de Propiedad Horizontal en Colombia.
+        </div>
+      </div>
+    `;
+
+    const dispatchRes = await dispatchEmail({
+      to: result.email,
+      toName: result.name,
+      subject: `Código de Activación VotoSmart: ${code}`,
+      type: 'invitacion',
+      html: emailHtml
+    });
+
+    res.json({
+      success: true,
+      maskedEmail: result.maskedEmail,
+      name: result.name,
+      documentNumber: result.documentNumber,
+      apartment: result.apartment,
+      building: result.building,
+      message: `Hemos enviado el código de verificación de 6 dígitos a su correo (${result.maskedEmail}). Por favor revise su bandeja de entrada o spam.`,
+      deliveryMode: dispatchRes.deliveryMode
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Voter Activation: Register new password with verified 6-digit code
+app.post('/api/auth/voter/register-password', (req, res) => {
+  try {
+    const documentNumber = req.body.documentNumber || req.body.cedula;
+    const { code, password } = req.body;
+    if (!documentNumber || !code || !password) {
+      return res.status(400).json({ error: 'Cédula, código de 6 dígitos y nueva contraseña son obligatorios.' });
+    }
+    const result = store.registerVoterPassword(documentNumber, code, password);
+    res.json({
+      success: true,
+      user: result.user,
+      token: result.token,
+      complex: result.complex,
+      message: '¡Cuenta activada y contraseña registrada con éxito! Ya puedes ingresar con tu cédula y contraseña.'
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Password Recovery (Supports Email or Cédula)
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const identifier = req.body.email || req.body.identifier || req.body.documentNumber || req.body.cedula;
+    if (!identifier) {
+      return res.status(400).json({ error: 'El correo electrónico o número de cédula es obligatorio' });
+    }
+    const result = store.requestPasswordReset(identifier);
+    const code = result.code;
+    
+    // Dispatch real email via SMTP
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #0f766e; margin: 0; font-size: 24px;">VotoSmart Colombia</h2>
+          <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Recuperación de Contraseña</p>
         </div>
         <div style="background: #f0fdfa; border: 1px solid #99f6e4; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
           <p style="margin: 0 0 8px; font-size: 14px; color: #134e4a; font-weight: bold;">Código de Recuperación de Contraseña</p>
           <div style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #0f766e; font-family: monospace; padding: 12px; background: #ffffff; border-radius: 8px; display: inline-block; border: 2px dashed #0d9488;">
-            ${result.code}
+            ${code}
           </div>
           <p style="margin: 8px 0 0; font-size: 12px; color: #0f766e;">Este código expira en 15 minutos.</p>
         </div>
         <p style="font-size: 13px; color: #334155; line-height: 1.6;">
           Estimado(a) <strong>${result.userName || 'Usuario'}</strong>,<br>
-          Has solicitado restablecer tu contraseña en VotoSmart para el conjunto <strong>${store.getComplex().name}</strong>.
+          Has solicitado restablecer tu contraseña en VotoSmart para el conjunto <strong>${store.getComplex().name}</strong>.<br>
           Ingresa este código de 6 dígitos en la aplicación para crear tu nueva contraseña.
         </p>
         <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center;">
@@ -125,9 +230,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const dispatchRes = await dispatchEmail({
       to: result.email,
       toName: result.userName || 'Usuario',
-      subject: `Código de Recuperación VotoSmart: ${result.code}`,
+      subject: `Código de Recuperación VotoSmart: ${code}`,
       type: 'password_reset',
-      code: result.code,
       html: emailHtml
     });
 
@@ -146,11 +250,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
 app.post('/api/auth/verify-reset-code', (req, res) => {
   try {
-    const { email, code } = req.body;
-    if (!email || !code) {
-      return res.status(400).json({ error: 'Correo y código de verificación son requeridos.' });
+    const identifier = req.body.email || req.body.identifier || req.body.documentNumber || req.body.cedula;
+    const { code } = req.body;
+    if (!identifier || !code) {
+      return res.status(400).json({ error: 'Correo o cédula y código de verificación son requeridos.' });
     }
-    const result = store.verifyResetCode(email, code);
+    const result = store.verifyResetCode(identifier, code);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -159,18 +264,19 @@ app.post('/api/auth/verify-reset-code', (req, res) => {
 
 app.post('/api/auth/reset-password', (req, res) => {
   try {
-    const { email, code, newPassword } = req.body;
-    if (!email || !code || !newPassword) {
-      return res.status(400).json({ error: 'Correo, código y nueva contraseña son requeridos.' });
+    const identifier = req.body.email || req.body.identifier || req.body.documentNumber || req.body.cedula;
+    const { code, newPassword } = req.body;
+    if (!identifier || !code || !newPassword) {
+      return res.status(400).json({ error: 'Identificador (correo o cédula), código y nueva contraseña son requeridos.' });
     }
-    const result = store.resetPassword(email, code, newPassword);
+    const result = store.resetPassword(identifier, code, newPassword);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Voter OTP Flow (Cédula + Código al Correo)
+// Legacy Voter OTP Flow (fallback)
 app.post('/api/auth/voter-request-otp', async (req, res) => {
   try {
     const documentNumber = req.body.documentNumber || req.body.documentId || req.body.cedula;
@@ -179,7 +285,6 @@ app.post('/api/auth/voter-request-otp', async (req, res) => {
     }
     const result = store.requestVoterOtp(documentNumber);
 
-    // Retrieve code from store resetRequests
     const reqItem = store.getResetRequests().find(r => r.email.toLowerCase() === result.email.toLowerCase());
     const otpCode = reqItem?.code || '123456';
 
@@ -198,7 +303,7 @@ app.post('/api/auth/voter-request-otp', async (req, res) => {
         </div>
         <p style="font-size: 13px; color: #334155; line-height: 1.6;">
           Estimado(a) copropietario(a) <strong>${result.name}</strong> (${result.building} ${result.apartment}),<br>
-          Se ha solicitado el acceso para votación digital con tu documento <strong>${result.documentNumber}</strong>.
+          Se ha solicitado el acceso para votación digital con tu documento <strong>${result.documentNumber}</strong>.<br>
           Ingresa este código de 6 dígitos en la pantalla para ingresar a la sala de votación.
         </p>
         <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center;">
@@ -212,7 +317,6 @@ app.post('/api/auth/voter-request-otp', async (req, res) => {
       toName: result.name,
       subject: `Código de Acceso a Votación VotoSmart: ${otpCode}`,
       type: 'voter_otp',
-      code: otpCode,
       html: emailHtml
     });
 
@@ -365,8 +469,8 @@ app.get('/api/emails/status', (req, res) => {
 });
 
 app.get('/api/emails', (req, res) => {
-  const history = getEmailHistory();
-  res.json(history);
+  // Security & Habeas Data: Never expose recipient codes or email contents
+  res.json([]);
 });
 
 app.post('/api/emails/test-send', async (req, res) => {
@@ -857,6 +961,52 @@ app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
+});
+
+// Email Service Diagnostics & History Endpoints
+app.get('/api/email-service/status', (req, res) => {
+  res.json(getEmailServiceStatus());
+});
+
+app.post('/api/email-service/verify', async (req, res) => {
+  const result = await verifySmtpConnection();
+  res.json(result);
+});
+
+app.post('/api/email-service/test-send', async (req, res) => {
+  try {
+    const { to, subject, message } = req.body;
+    if (!to) {
+      return res.status(400).json({ error: 'Dirección de correo destinatario es obligatoria' });
+    }
+    const result = await dispatchEmail({
+      to,
+      subject: subject || '[VotoSmart] Correo de Prueba del Sistema',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #0f766e;">VotoSmart Colombia</h2>
+          <p>Este es un correo de prueba enviado desde la plataforma de votaciones.</p>
+          <div style="background: #f0fdfa; padding: 14px; border-radius: 8px; border-left: 4px solid #0f766e;">
+            <p style="margin: 0; font-weight: bold; color: #0f766e;">${message || 'El servicio SMTP se encuentra 100% operativo y verificado.'}</p>
+          </div>
+          <p style="color: #64748b; font-size: 12px; margin-top: 20px;">Hora del despacho: ${new Date().toLocaleString('es-CO')}</p>
+        </div>
+      `,
+      type: 'convocatoria'
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/email-service/history', (req, res) => {
+  // Security & Privacy Policy: No email codes or recipient logs exposed
+  res.json([]);
+});
+
+app.get('/api/email-service/latest', (req, res) => {
+  res.json(null);
 });
 
 // 12. Audit Logs (Isolated by Complex)

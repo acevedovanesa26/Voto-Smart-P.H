@@ -21,6 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { UserRole } from '../../types';
 import { Alert, Badge, Button, Modal } from '../common/UIComponents';
+import { PasswordStrengthIndicator, validatePasswordPolicy } from '../auth/PasswordStrengthIndicator';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -132,8 +133,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
       setPassMessage({ type: 'error', text: 'Debe ingresar su contraseña actual.' });
       return;
     }
-    if (newPassword.trim().length < 6) {
-      setPassMessage({ type: 'error', text: 'La nueva contraseña debe tener mínimo 6 caracteres.' });
+    const validation = validatePasswordPolicy(newPassword);
+    if (!validation.isValid) {
+      setPassMessage({ type: 'error', text: validation.errorMessage || 'La nueva contraseña no cumple con los requisitos de seguridad requeridos.' });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -403,7 +405,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               <div className="p-3 bg-teal-50 border border-teal-200 rounded-2xl text-xs text-teal-900 flex items-start gap-2">
                 <Shield className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
                 <span>
-                  Protege tu cuenta. Tu nueva contraseña debe tener mínimo 6 caracteres. Si eres copropietario o directivo, asegúrate de no compartirla.
+                  Protege tu cuenta con una contraseña segura. Debe cumplir: mínimo 8 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.
                 </span>
               </div>
 
@@ -449,10 +451,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                   <input
                     type={showNewPass ? 'text' : 'password'}
                     required
-                    minLength={6}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres (A-Z, a-z, 0-9, #)"
                     className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
                   />
                   <button
@@ -504,6 +505,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                   </p>
                 )}
               </div>
+
+              {/* Password Strength Indicator */}
+              {newPassword && (
+                <PasswordStrengthIndicator password={newPassword} />
+              )}
 
               <div className="pt-2 flex items-center justify-end gap-3">
                 <Button

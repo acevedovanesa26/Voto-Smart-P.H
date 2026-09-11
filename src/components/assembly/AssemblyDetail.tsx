@@ -8,6 +8,7 @@ import {
   Clock,
   Download,
   Edit3,
+  Eye,
   FileCheck2,
   FileSpreadsheet,
   FileText,
@@ -47,6 +48,7 @@ import { exportOwnersToExcel, exportQuorumToExcel, exportVoteResultsToExcel } fr
 import { generateMinutesPDF } from '../../utils/pdfGenerator';
 import { Alert, Badge, Button, Card, Modal, StatCard } from '../common/UIComponents';
 import { EditAssemblyModal } from './EditAssemblyModal';
+import { EditVoteModal } from './EditVoteModal';
 import { downloadFile, fileToBase64, createCandidateProposalPdfUri } from '../../utils/pdfHelper';
 import { PdfPreviewModal } from '../common/PdfPreviewModal';
 
@@ -206,6 +208,37 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
     }
   };
 
+  const handleUpdateAssemblyStatus = async (newStatus: 'scheduled' | 'in_progress' | 'finished') => {
+    if (!assembly) return;
+    try {
+      const updated = await api.updateAssembly(assembly.id, { status: newStatus });
+      setAssembly(updated);
+      loadData();
+    } catch (err: any) {
+      alert('Error al actualizar estado de la asamblea: ' + err.message);
+    }
+  };
+
+  const handleDeleteVote = async (voteId: string, voteTitle: string) => {
+    if (!window.confirm(`¿Está seguro de eliminar permanentemente la votación "${voteTitle}"? Se borrarán todos los registros asociados.`)) return;
+    try {
+      await api.deleteVote(voteId, user?.name || 'Administración');
+      loadData();
+    } catch (err: any) {
+      alert('Error al eliminar votación: ' + err.message);
+    }
+  };
+
+  const handleResetVote = async (voteId: string, voteTitle: string) => {
+    if (!window.confirm(`¿Desea reiniciar la votación "${voteTitle}" a estado programado? Se restablecerá a 0 votos.`)) return;
+    try {
+      await api.resetVote(voteId, user?.name || 'Administración');
+      loadData();
+    } catch (err: any) {
+      alert('Error al reiniciar votación: ' + err.message);
+    }
+  };
+
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNoteContent.trim()) return;
@@ -346,11 +379,49 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
           >
             ← Volver al Panel de Asambleas
           </button>
-          <div className="flex flex-wrap items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-3 mb-2">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{assembly.title}</h1>
-            <Badge variant={assembly.status === 'in_progress' ? 'emerald' : 'teal'}>
-              {assembly.status === 'in_progress' ? 'EN CURSO' : assembly.status.toUpperCase()}
-            </Badge>
+            
+            {/* Direct Assembly Status Selector */}
+            <div className="inline-flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => handleUpdateAssemblyStatus('scheduled')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                  assembly.status === 'scheduled'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Marcar asamblea como programada / convocada"
+              >
+                Convocada
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateAssemblyStatus('in_progress')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  assembly.status === 'in_progress'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Marcar asamblea como en curso (sesión activa)"
+              >
+                <span className={`w-2 h-2 rounded-full ${assembly.status === 'in_progress' ? 'bg-white animate-ping' : 'bg-emerald-500'}`} />
+                En Curso
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateAssemblyStatus('finished')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                  assembly.status === 'finished'
+                    ? 'bg-slate-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Marcar asamblea como finalizada"
+              >
+                Finalizada
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
             <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-teal-600" /> {assembly.date}</span>
@@ -672,45 +743,128 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {/* Candidate Proposals PDF and Attachments */}
+                  {(vote.attachmentPdfUrl || (vote.candidates && vote.candidates.some((c) => c.proposalPdfUrl))) && (
+                    <div className="pt-2 border-t border-slate-200/60 space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Documentos y Propuestas PDF:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {vote.attachmentPdfUrl && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPdfPreviewState({
+                                isOpen: true,
+                                title: vote.title,
+                                url: vote.attachmentPdfUrl!,
+                                fileName: vote.attachmentPdfName || 'Documento_Adjunto.pdf'
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 transition-colors"
+                          >
+                            <FileText className="w-3 h-3 text-teal-600" />
+                            {vote.attachmentPdfName || 'Documento de Votación'} (PDF)
+                          </button>
+                        )}
+                        {vote.candidates?.filter((c) => c.proposalPdfUrl).map((cand) => (
+                          <button
+                            key={cand.id}
+                            type="button"
+                            onClick={() => {
+                              setPdfPreviewState({
+                                isOpen: true,
+                                title: `Propuesta de Campaña: ${cand.name}`,
+                                url: cand.proposalPdfUrl!,
+                                fileName: cand.proposalPdfName || `Propuesta_${cand.name.replace(/\s+/g, '_')}.pdf`
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 transition-colors"
+                            title="Ver propuesta detallada del candidato"
+                          >
+                            <FileText className="w-3 h-3 text-slate-500" />
+                            Propuesta: {cand.name.split(' ')[0]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Controls */}
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                  {vote.status === 'scheduled' && (
-                    <Button
-                      size="sm"
-                      variant="success"
-                      onClick={() => handleStartVote(vote.id)}
-                      leftIcon={<Play className="w-4 h-4" />}
-                      className="w-full"
-                    >
-                      Abrir Votación
-                    </Button>
-                  )}
-
-                  {vote.status === 'active' && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleCloseVote(vote.id)}
-                      leftIcon={<StopCircle className="w-4 h-4" />}
-                      className="w-full"
-                    >
-                      Cerrar y Consolidar Resultados
-                    </Button>
-                  )}
-
-                  {vote.status === 'finished' && (
-                    <div className="w-full flex items-center justify-between text-xs font-bold text-slate-500">
-                      <span>Resultados oficiales consolidados</span>
-                      <button
-                        onClick={() => setActiveTab('results')}
-                        className="text-teal-600 hover:underline"
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    {vote.status === 'scheduled' && (
+                      <Button
+                        size="sm"
+                        variant="success"
+                        onClick={() => handleStartVote(vote.id)}
+                        leftIcon={<Play className="w-4 h-4" />}
+                        className="flex-1 font-bold"
                       >
-                        Ver Detalle →
+                        Abrir Votación
+                      </Button>
+                    )}
+
+                    {vote.status === 'active' && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleCloseVote(vote.id)}
+                        leftIcon={<StopCircle className="w-4 h-4" />}
+                        className="flex-1 font-bold"
+                      >
+                        Cerrar y Consolidar
+                      </Button>
+                    )}
+
+                    {vote.status === 'finished' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setActiveTab('results')}
+                        leftIcon={<Award className="w-4 h-4" />}
+                        className="flex-1 font-bold text-teal-700 border-teal-300 hover:bg-teal-50"
+                      >
+                        Ver Resultados Oficiales
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingVote(vote)}
+                      leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+                      className="border-slate-300 font-bold hover:bg-slate-50"
+                      title="Editar parámetros, título, candidatos o documentos"
+                    >
+                      Editar
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-3">
+                      {vote.status !== 'scheduled' && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetVote(vote.id, vote.title)}
+                          className="text-amber-700 hover:text-amber-900 font-bold inline-flex items-center gap-1 hover:underline"
+                        >
+                          <RotateCcw className="w-3 h-3" /> Reiniciar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteVote(vote.id, vote.title)}
+                        className="text-rose-600 hover:text-rose-800 font-bold inline-flex items-center gap-1 hover:underline"
+                      >
+                        <Trash2 className="w-3 h-3" /> Eliminar
                       </button>
                     </div>
-                  )}
+
+                    <span className="text-[10px] text-slate-400">
+                      ID: {vote.id.replace('vote-', '')}
+                    </span>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -1173,6 +1327,42 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
           }}
         />
       )}
+
+      {/* Edit Vote Modal */}
+      {editingVote && (
+        <EditVoteModal
+          isOpen={!!editingVote}
+          vote={editingVote}
+          assemblyId={assemblyId}
+          complexName={complex?.name}
+          registeredOwners={quorum.map((q) => ({
+            id: q.ownerId,
+            complexId: complex?.id || '',
+            name: q.ownerName,
+            documentType: 'CC',
+            documentNumber: '',
+            email: '',
+            phone: '',
+            building: q.building,
+            apartment: q.apartment,
+            coefficient: q.coefficient,
+            status: 'active',
+            createdAt: ''
+          }))}
+          onClose={() => setEditingVote(null)}
+          onVoteUpdated={() => {
+            loadData();
+            setEditingVote(null);
+          }}
+          onVoteDeleted={() => {
+            loadData();
+            setEditingVote(null);
+          }}
+          onOpenPdfPreview={(url, title, fileName) => {
+            setPdfPreviewState({ isOpen: true, url, title, fileName });
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1211,6 +1401,9 @@ const CreateVoteModal: React.FC<{
   const [candRole, setCandRole] = useState('Consejo de Administración (Principal)');
   const [candProposal, setCandProposal] = useState('');
   const [candPhoto, setCandPhoto] = useState('');
+  const [candPdfData, setCandPdfData] = useState<{ url: string; name: string; size: number } | null>(null);
+  const [attachmentPdfUrl, setAttachmentPdfUrl] = useState<string | undefined>(undefined);
+  const [attachmentPdfName, setAttachmentPdfName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (isOpen) {
@@ -1263,6 +1456,14 @@ const CreateVoteModal: React.FC<{
       return;
     }
 
+    const proposalText = candProposal.trim() || 'Candidato postulado para la representación en la asamblea.';
+    const proposalPdfUrl = candPdfData?.url || createCandidateProposalPdfUri(
+      candName.trim(),
+      `${candApto.trim() || 'Apto'} - ${candBuilding.trim() || 'Torre'}`,
+      candRole.trim() || 'Consejo de Administración',
+      candProposal.trim() || 'Cumplimiento del reglamento de propiedad horizontal y optimización de recursos.'
+    );
+
     const newCandidate: Candidate = {
       id: `cand-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
       name: candName.trim(),
@@ -1270,8 +1471,11 @@ const CreateVoteModal: React.FC<{
       apartment: candApto.trim() || 'Apto Propio',
       building: candBuilding.trim() || 'Torre Principal',
       rolePostulation: candRole.trim() || 'Consejo de Administración',
-      profileSummary: candProposal.trim() || 'Candidato postulado para la representación en la asamblea.',
+      profileSummary: proposalText,
       proposals: candProposal.trim() || 'Cumplimiento del reglamento de propiedad horizontal y optimización de recursos.',
+      proposalPdfUrl,
+      proposalPdfName: candPdfData?.name || `Propuesta_${candName.trim().replace(/\s+/g, '_')}.pdf`,
+      proposalPdfSize: candPdfData?.size || 42000,
       photoUrl: candPhoto.trim() || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
       status: 'active'
     };
@@ -1285,6 +1489,7 @@ const CreateVoteModal: React.FC<{
     setCandBuilding('');
     setCandProposal('');
     setCandPhoto('');
+    setCandPdfData(null);
   };
 
   const handleRemoveCandidate = (id: string) => {
@@ -1355,6 +1560,8 @@ const CreateVoteModal: React.FC<{
         type,
         options: formattedOptions,
         candidates: type === 'candidate_election' ? candidatesList : undefined,
+        attachmentPdfUrl,
+        attachmentPdfName,
         isSecret,
         requiresCoefficient,
         maxSelections: type === 'multiple_choice' || type === 'candidate_election' ? maxSelections : 1,
@@ -1520,6 +1727,38 @@ const CreateVoteModal: React.FC<{
                   placeholder="Resumen del plan de trabajo, experiencia y compromisos con la comunidad..."
                   className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 font-medium resize-none"
                 />
+              </div>
+
+              {/* Candidate PDF Proposal Upload */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                <label className="block font-bold text-slate-700 text-[11px] mb-1">
+                  Adjuntar Documento PDF de Propuestas (Opcional)
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        const base64 = await fileToBase64(file);
+                        setCandPdfData({ url: base64, name: file.name, size: file.size });
+                      } catch (err: any) {
+                        alert('Error al leer archivo PDF: ' + err.message);
+                      }
+                    }
+                  }}
+                  className="w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
+                />
+                {candPdfData ? (
+                  <p className="mt-1 text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                    ✓ PDF cargado: {candPdfData.name} ({Math.round(candPdfData.size / 1024)} KB)
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Si no adjunta un archivo, el sistema generará automáticamente un PDF estructurado con la propuesta escrita arriba.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end">

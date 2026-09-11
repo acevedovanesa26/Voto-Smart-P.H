@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Building2, CheckCircle2, Eye, EyeOff, KeyRound, Mail, Phone, Shield, ShieldCheck, User as UserIcon, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, Button, Modal } from '../common/UIComponents';
+import { PasswordStrengthIndicator, validatePasswordPolicy } from './PasswordStrengthIndicator';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -38,8 +39,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
       setError('Las contraseñas no coinciden.');
       return;
     }
-    if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    const validation = validatePasswordPolicy(password);
+    if (!validation.isValid) {
+      setError(validation.errorMessage || 'La contraseña no cumple con la política de seguridad requerida.');
       return;
     }
 
@@ -236,7 +238,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres (A-Z, a-z, 0-9, #)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-9 pr-9 py-2 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
@@ -275,6 +277,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, o
               </div>
             </div>
           </div>
+
+          {/* Password Strength Indicator */}
+          {password && (
+            <PasswordStrengthIndicator password={password} />
+          )}
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200">
             <button

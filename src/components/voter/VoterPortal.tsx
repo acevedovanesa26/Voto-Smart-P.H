@@ -303,7 +303,7 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                           </Badge>
                         ) : isActive ? (
                           <Badge variant={isRestricted ? 'amber' : 'teal'} size="lg" className={isRestricted ? 'font-bold' : 'animate-pulse font-bold'}>
-                            {isRestricted ? 'RESTREÑIDO PARA SU PERFIL' : '● VOTACIÓN ABIERTA AHORA'}
+                            {isRestricted ? 'RESTRINGIDO PARA SU INMUEBLE' : '● VOTACIÓN ABIERTA AHORA'}
                           </Badge>
                         ) : (
                           <Badge variant="slate" size="md">
@@ -348,6 +348,49 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                         <span>•</span>
                         <span>{vote.requiresCoefficient ? 'Ponderado por Coeficiente de Copropiedad' : '1 Inmueble = 1 Voto'}</span>
                       </div>
+
+                      {/* Candidate Proposals & Documents Attached */}
+                      {(vote.attachmentPdfUrl || (vote.candidates && vote.candidates.some((c) => c.proposalPdfUrl))) && (
+                        <div className="pt-2 border-t border-slate-200/60 space-y-1.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Documentos oficiales y propuestas:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {vote.attachmentPdfUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleOpenPdfPreview(
+                                    vote.attachmentPdfUrl!,
+                                    vote.title,
+                                    vote.attachmentPdfName || 'Documento_Adjunto.pdf'
+                                  );
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100 transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                <span>{vote.attachmentPdfName || 'Documento Técnico'} (PDF)</span>
+                              </button>
+                            )}
+                            {vote.candidates?.filter((c) => c.proposalPdfUrl).map((cand) => (
+                              <button
+                                key={cand.id}
+                                type="button"
+                                onClick={() => {
+                                  handleOpenPdfPreview(
+                                    cand.proposalPdfUrl!,
+                                    `Propuesta: ${cand.name}`,
+                                    cand.proposalPdfName || `Propuesta_${cand.name.replace(/\s+/g, '_')}.pdf`
+                                  );
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 transition-colors"
+                                title="Ver propuestas del candidato en PDF"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Propuesta: {cand.name.split(' ')[0]}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Explicit Restriction Notice if not eligible */}
                       {isRestricted && isActive && (

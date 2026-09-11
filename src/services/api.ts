@@ -18,11 +18,11 @@ const API_BASE = '/api';
 
 export const api = {
   // Auth
-  async login(email: string, password?: string): Promise<AuthResponse> {
+  async login(identifier: string, password?: string): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ identifier, email: identifier, documentNumber: identifier, password })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -55,11 +55,72 @@ export const api = {
     return res.json();
   },
 
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string; verificationCode?: string }> {
+  // Check voter census status and if password is set
+  async checkVoterStatus(documentNumber: string): Promise<{
+    success: boolean;
+    exists: boolean;
+    hasPassword: boolean;
+    name: string;
+    maskedEmail: string;
+    documentNumber: string;
+    apartment: string;
+    building: string;
+    coefficient: number;
+  }> {
+    const res = await fetch(`${API_BASE}/auth/voter/check-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentNumber })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'No se encontró el copropietario en el censo.');
+    }
+    return res.json();
+  },
+
+  // Request 6-digit activation code to registered email to create password
+  async requestVoterActivation(documentNumber: string): Promise<{
+    success: boolean;
+    maskedEmail: string;
+    name: string;
+    documentNumber: string;
+    apartment: string;
+    building: string;
+    message: string;
+    deliveryMode?: string;
+  }> {
+    const res = await fetch(`${API_BASE}/auth/voter/request-activation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentNumber })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al solicitar código de activación');
+    }
+    return res.json();
+  },
+
+  // Verify 6-digit code and register new password
+  async registerVoterPassword(documentNumber: string, code: string, password: string): Promise<AuthResponse> {
+    const res = await fetch(`${API_BASE}/auth/voter/register-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentNumber, code, password })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al registrar contraseña');
+    }
+    return res.json();
+  },
+
+  async forgotPassword(identifier: string): Promise<{ success: boolean; message: string; maskedEmail?: string; userName?: string }> {
     const res = await fetch(`${API_BASE}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ identifier, email: identifier, documentNumber: identifier })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -68,11 +129,11 @@ export const api = {
     return res.json();
   },
 
-  async verifyResetCode(email: string, code: string): Promise<{ valid: boolean }> {
+  async verifyResetCode(identifier: string, code: string): Promise<{ valid: boolean }> {
     const res = await fetch(`${API_BASE}/auth/verify-reset-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code })
+      body: JSON.stringify({ identifier, email: identifier, documentNumber: identifier, code })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -81,11 +142,11 @@ export const api = {
     return res.json();
   },
 
-  async resetPassword(email: string, code: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+  async resetPassword(identifier: string, code: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     const res = await fetch(`${API_BASE}/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code, newPassword })
+      body: JSON.stringify({ identifier, email: identifier, documentNumber: identifier, code, newPassword })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -698,6 +759,49 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    return res.json();
+  },
+
+  // Email Service & SMTP Diagnostics
+  async getEmailServiceStatus(): Promise<any> {
+    const res = await fetch(`${API_BASE}/email-service/status`);
+    return res.json();
+  },
+
+  async verifySmtp(): Promise<{ success: boolean; message: string; durationMs: number }> {
+    const res = await fetch(`${API_BASE}/email-service/verify`, { method: 'POST' });
+    return res.json();
+  },
+
+  async testSendDiagnosticEmail(to: string, message?: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/email-service/test-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, message })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al enviar correo de prueba');
+    }
+    return res.json();
+  },
+
+  async getEmailHistory(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/email-service/history`);
+    return res.json();
+  },
+
+  async getLatestEmail(query: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/email-service/latest?q=${encodeURIComponent(query)}`);
+    return res.json();
+  },
+
+  async retryEmail(id: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/email-service/retry/${id}`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al reintentar envío');
+    }
     return res.json();
   }
 };

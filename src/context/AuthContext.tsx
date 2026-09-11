@@ -13,6 +13,7 @@ interface AuthContextType {
   setFontSize: (size: 'normal' | 'large' | 'xlarge') => void;
   login: (email: string, password?: string) => Promise<void>;
   loginVoterWithOtp: (documentNumber: string, code: string) => Promise<void>;
+  registerVoterPassword: (documentNumber: string, code: string, password: string) => Promise<void>;
   register: (userData: {
     name: string;
     email: string;
@@ -87,6 +88,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.complex) setComplex(res.complex);
   };
 
+  const registerVoterPassword = async (documentNumber: string, code: string, password: string) => {
+    const res = await api.registerVoterPassword(documentNumber, code, password);
+    setUser(res.user);
+    if (res.complex) setComplex(res.complex);
+  };
+
   const register = async (userData: any) => {
     const res = await api.register(userData);
     setUser(res.user);
@@ -136,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFontSize,
         login,
         loginVoterWithOtp,
+        registerVoterPassword,
         register,
         logout,
         refreshComplex,

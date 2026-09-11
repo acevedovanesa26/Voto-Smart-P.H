@@ -42,6 +42,43 @@ interface PasswordResetRequest {
   verified: boolean;
 }
 
+const COMMON_PASSWORDS = new Set([
+  '12345678',
+  '123456789',
+  'password',
+  'password123',
+  'password123!',
+  'admin123',
+  'admin123!',
+  'admin2024',
+  'admin2025',
+  'qwerty12345',
+  'contrasena123',
+  'votosmart123'
+]);
+
+export function assertPasswordPolicy(password: string): void {
+  const p = (password || '').trim();
+  if (p.length < 8) {
+    throw new Error('La contraseña debe tener como mínimo 8 caracteres.');
+  }
+  if (!/[A-Z]/.test(p)) {
+    throw new Error('La contraseña debe incluir al menos una letra mayúscula (A-Z).');
+  }
+  if (!/[a-z]/.test(p)) {
+    throw new Error('La contraseña debe incluir al menos una letra minúscula (a-z).');
+  }
+  if (!/[0-9]/.test(p)) {
+    throw new Error('La contraseña debe incluir al menos un número (0-9).');
+  }
+  if (!/[^A-Za-z0-9]/.test(p)) {
+    throw new Error('La contraseña debe incluir al menos un carácter especial (!@#$%^&*...).');
+  }
+  if (COMMON_PASSWORDS.has(p.toLowerCase())) {
+    throw new Error('La contraseña ingresada es demasiado común o predecible. Elija una combinación más segura.');
+  }
+}
+
 class DataStore {
   private complexes: ResidentialComplex[] = [...DEMO_COMPLEXES];
   private complex: ResidentialComplex = { ...DEMO_COMPLEXES[0] };
@@ -147,24 +184,64 @@ class DataStore {
     return undefined;
   }
 
-  validateUserCredentials(email: string, password?: string) {
-    const user = this.getUserByEmail(email);
-    if (!user) {
-      throw new Error('No existe ninguna cuenta registrada con el correo electrónico ingresado.');
+  validateUserCredentials(identifier: string, password?: string) {
+    if (!identifier || !identifier.trim()) {
+      throw new Error('Debe ingresar su correo electrónico o número de cédula.');
     }
-
     if (!password || !password.trim()) {
       throw new Error('Debe ingresar su contraseña.');
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const enteredPass = password.trim();
-    const storedPass = this.userPasswords.get(cleanEmail) || 
-      this.userPasswords.get(user.email.toLowerCase()) || 
-      'admin123';
+    const clean = identifier.trim().toLowerCase();
+    let user = this.getUserByEmail(clean) || this.getUserByDocument(clean);
+    let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
 
-    if (storedPass !== enteredPass && enteredPass !== 'admin123') {
+    if (!user && owner) {
+      user = {
+        id: `user-${owner.id}`,
+        name: owner.name,
+        email: owner.email,
+        role: 'owner',
+        phone: owner.phone,
+        documentType: owner.documentType,
+        documentNumber: owner.documentNumber,
+        apartment: owner.apartment,
+        building: owner.building,
+        coefficient: owner.coefficient,
+        status: 'active',
+        complexId: owner.complexId || this.complex.id,
+        createdAt: new Date().toISOString()
+      };
+      this.users.push(user);
+    }
+
+    if (!user) {
+      throw new Error('No existe ninguna cuenta registrada con los datos ingresados.');
+    }
+
+    const cleanEmail = user.email.toLowerCase();
+    const storedPass = this.userPasswords.get(cleanEmail);
+
+    if (!storedPass) {
+      throw new Error('Aún no has registrado una contraseña para esta cuenta. Haz clic en "Activar Cuenta / Registrar Clave" para recibir tu código al correo y crear tu contraseña.');
+    }
+
+    const enteredPass = password.trim();
+    if (storedPass !== enteredPass) {
       throw new Error('Contraseña incorrecta. Por favor verifique sus datos o recupere su clave.');
+    }
+
+    // Auto mark attendance for active assembly if voter
+    if (user.role === 'owner') {
+      const activeAssembly = this.assemblies.find(a => a.status === 'in_progress' || a.status === 'scheduled');
+      if (activeAssembly) {
+        try {
+          const ownerId = owner?.id || (user.id.startsWith('user-owner-') ? user.id.replace('user-', '') : user.id);
+          this.toggleQuorumCheckIn(activeAssembly.id, ownerId, true, 'Ingreso con Contraseña');
+        } catch (e) {
+          // already checked in
+        }
+      }
     }
 
     this.addAuditLog(user.id, user.name, user.role, 'INICIO_SESION', `Inicio de sesión exitoso como ${user.role}`);
@@ -195,7 +272,170 @@ class DataStore {
     });
   }
 
-  // Voter OTP Request (Login by Cédula + Código al Correo)
+  // Check voter status in census (Cédula lookup)
+  checkVoterStatus(documentNumber: string) {
+    const cleanDoc = (documentNumber || '').toString().trim();
+    if (!cleanDoc) {
+      throw new Error('Debe ingresar su número de cédula o documento de identidad.');
+    }
+
+    let user = this.getUserByDocument(cleanDoc);
+    let owner = this.getOwnerByDocument(cleanDoc);
+
+    if (!user && !owner && cleanDoc.includes('@')) {
+      user = this.getUserByEmail(cleanDoc);
+      owner = this.owners.find(o => o.email.toLowerCase() === cleanDoc.toLowerCase());
+    }
+
+    if (!user && !owner) {
+      throw new Error(`No se encontró ningún copropietario registrado con la cédula "${cleanDoc}" en ${this.complex.name}. Por favor verifique el número o regístrese en el censo.`);
+    }
+
+    const email = user?.email || owner?.email || '';
+    const hasPassword = this.userPasswords.has(email.toLowerCase());
+    const [userPart, domainPart] = email.split('@');
+    const maskedUser = userPart.length > 2 
+      ? `${userPart[0]}***${userPart[userPart.length - 1]}` 
+      : `${userPart[0]}***`;
+    const maskedEmail = `${maskedUser}@${domainPart || 'correo.com'}`;
+
+    return {
+      exists: true,
+      hasPassword,
+      name: user?.name || owner?.name || 'Copropietario',
+      email,
+      maskedEmail,
+      documentNumber: user?.documentNumber || owner?.documentNumber || cleanDoc,
+      apartment: user?.apartment || owner?.apartment || '',
+      building: user?.building || owner?.building || '',
+      coefficient: user?.coefficient || owner?.coefficient || 0
+    };
+  }
+
+  // Voter Activation: Request 6-digit code to email for registering password
+  requestVoterActivation(documentNumber: string) {
+    const status = this.checkVoterStatus(documentNumber);
+    const email = status.email;
+
+    // Cooldown check
+    const existingReq = this.resetRequests.find(r => r.email.toLowerCase() === email.toLowerCase() && !r.used);
+    if (existingReq && (Date.now() - existingReq.createdAt) < 20000) {
+      const waitSec = Math.ceil((20000 - (Date.now() - existingReq.createdAt)) / 1000);
+      throw new Error(`Por favor espera ${waitSec} segundos antes de solicitar un nuevo código.`);
+    }
+
+    // Invalidate existing unused codes
+    this.resetRequests.forEach((r) => {
+      if (r.email.toLowerCase() === email.toLowerCase()) {
+        r.used = true;
+      }
+    });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const createdAt = Date.now();
+    this.resetRequests.push({
+      email: email.toLowerCase(),
+      code,
+      createdAt,
+      expiresAt: createdAt + 15 * 60 * 1000,
+      used: false,
+      verified: false
+    });
+
+    return {
+      success: true,
+      code, // For server-side dispatch to SMTP only
+      email: status.email,
+      maskedEmail: status.maskedEmail,
+      name: status.name,
+      documentNumber: status.documentNumber,
+      apartment: status.apartment,
+      building: status.building,
+      coefficient: status.coefficient
+    };
+  }
+
+  // Voter Activation: Verify 6-digit code and register password
+  registerVoterPassword(documentNumber: string, code: string, password?: string) {
+    const cleanDoc = (documentNumber || '').toString().trim();
+    const cleanCode = (code || '').toString().replace(/\D/g, '').trim();
+
+    if (!cleanDoc || !cleanCode) {
+      throw new Error('Cédula y código de 6 dígitos son obligatorios.');
+    }
+    if (!password || !password.trim()) {
+      throw new Error('Debe definir su nueva contraseña.');
+    }
+
+    assertPasswordPolicy(password.trim());
+
+    const status = this.checkVoterStatus(cleanDoc);
+    const email = status.email;
+
+    const req = this.resetRequests.find(
+      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && !r.used
+    );
+
+    if (!req) {
+      throw new Error('El código ingresado es incorrecto o ya ha sido utilizado.');
+    }
+
+    if (Date.now() > req.expiresAt) {
+      req.used = true;
+      throw new Error('El código de verificación ha expirado. Por favor solicite uno nuevo.');
+    }
+
+    // Invalidate code so it can never be reused
+    req.used = true;
+    req.verified = true;
+
+    // Set user password
+    this.userPasswords.set(email.toLowerCase(), password.trim());
+
+    // Ensure user object exists in this.users
+    let user = this.getUserByEmail(email) || this.getUserByDocument(cleanDoc);
+    let owner = this.getOwnerByDocument(cleanDoc);
+    if (!user && owner) {
+      user = {
+        id: `user-${owner.id}`,
+        name: owner.name,
+        email: owner.email,
+        role: 'owner',
+        phone: owner.phone,
+        documentType: owner.documentType,
+        documentNumber: owner.documentNumber,
+        apartment: owner.apartment,
+        building: owner.building,
+        coefficient: owner.coefficient,
+        status: 'active',
+        complexId: this.complex.id,
+        createdAt: new Date().toISOString()
+      };
+      this.users.push(user);
+    }
+
+    // Auto mark attendance for active assembly if not already present
+    const activeAssembly = this.assemblies.find(a => a.status === 'in_progress' || a.status === 'scheduled');
+    if (activeAssembly && user) {
+      try {
+        const ownerId = owner?.id || (user.id.startsWith('user-owner-') ? user.id.replace('user-', '') : user.id);
+        this.toggleQuorumCheckIn(activeAssembly.id, ownerId, true, 'Activación de Contraseña');
+      } catch (e) {
+        // already checked in
+      }
+    }
+
+    this.addAuditLog(user!.id, user!.name, 'owner', 'ACTIVACION_CONTRASENA_VOTANTE', `Activación de cuenta y registro de contraseña para copropietario ${user!.name}`);
+    this.notifyChange();
+
+    return {
+      user: user!,
+      complex: this.complex,
+      token: `voter_token_${user!.id}_${Date.now()}`
+    };
+  }
+
+  // Voter OTP Request (Legacy or Direct Access)
   requestVoterOtp(documentNumber: string) {
     const cleanDoc = (documentNumber || '').toString().trim();
     if (!cleanDoc) {
@@ -275,19 +515,6 @@ class DataStore {
       expiresAt: createdAt + 15 * 60 * 1000,
       used: false,
       verified: false
-    });
-
-    // Record email log
-    const timestamp = new Date().toISOString();
-    this.emailLogs.unshift({
-      id: `email-voter-otp-${Date.now()}`,
-      assemblyId: this.assemblies[0]?.id || 'system',
-      recipientEmail: email,
-      recipientName: name,
-      subject: `Código de Acceso a Votación VotoSmart: ${code}`,
-      type: 'invitacion',
-      status: 'sent',
-      sentAt: timestamp
     });
 
     // Mask email for security (e.g. c***z@gmail.com)
@@ -432,9 +659,10 @@ class DataStore {
     };
     this.users.unshift(newUser);
     if (userData.password) {
+      assertPasswordPolicy(userData.password);
       this.userPasswords.set(newUser.email.toLowerCase(), userData.password.trim());
     } else {
-      this.userPasswords.set(newUser.email.toLowerCase(), 'admin123');
+      this.userPasswords.set(newUser.email.toLowerCase(), 'Admin2025*');
     }
 
     // Register in owners directory
@@ -482,10 +710,13 @@ class DataStore {
       throw new Error(`Ya existe un usuario registrado con el correo electrónico ${staffData.email}`);
     }
 
+    if (staffData.password) {
+      assertPasswordPolicy(staffData.password);
+    }
     const id = `user-staff-${Date.now()}`;
-    const initialPass = staffData.password && staffData.password.trim().length >= 6 
+    const initialPass = staffData.password && staffData.password.trim().length >= 8 
       ? staffData.password.trim() 
-      : `Voto${Math.floor(1000 + Math.random() * 9000)}`;
+      : `Voto${Math.floor(1000 + Math.random() * 9000)}!`;
 
     const newUser: User = {
       id,
@@ -527,7 +758,8 @@ class DataStore {
       throw new Error('Usuario no encontrado');
     }
 
-    if (staffData.password && staffData.password.trim().length >= 6) {
+    if (staffData.password) {
+      assertPasswordPolicy(staffData.password);
       this.userPasswords.set(this.users[idx].email.toLowerCase(), staffData.password.trim());
     }
 
@@ -659,9 +891,7 @@ class DataStore {
       throw new Error('Debe ingresar su contraseña actual.');
     }
 
-    if (!newPass || newPass.trim().length < 6) {
-      throw new Error('La nueva contraseña debe contener mínimo 6 caracteres.');
-    }
+    assertPasswordPolicy(newPass);
 
     const cleanEmail = user.email.toLowerCase();
     const storedPass =
@@ -685,19 +915,22 @@ class DataStore {
     return { success: true, message: 'Contraseña actualizada exitosamente.' };
   }
 
-  // Password Recovery Flow
-  requestPasswordReset(email: string) {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail) {
-      throw new Error('El correo electrónico es obligatorio.');
+  // Password Recovery Flow (Supports Email or Cédula)
+  requestPasswordReset(identifier: string) {
+    const clean = (identifier || '').trim().toLowerCase();
+    if (!clean) {
+      throw new Error('Debe ingresar su correo electrónico o su número de cédula.');
     }
 
-    let user = this.getUserByEmail(cleanEmail);
-    const owner = this.owners.find((o) => o.email.toLowerCase() === cleanEmail);
+    let user = this.getUserByEmail(clean) || this.getUserByDocument(clean);
+    let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
 
     if (!user && !owner) {
-      throw new Error('No existe ninguna cuenta registrada con el correo ingresado.');
+      throw new Error('No existe ninguna cuenta registrada con los datos ingresados.');
     }
+
+    const cleanEmail = (user?.email || owner?.email || '').toLowerCase();
+    const recipientName = user?.name || owner?.name || 'Usuario';
 
     // If owner exists but user account not materialized yet, create it
     if (!user && owner) {
@@ -719,10 +952,10 @@ class DataStore {
       this.users.push(user);
     }
 
-    // Cooldown check: prevent rapid resend abuse (minimum 30 seconds wait)
+    // Cooldown check: prevent rapid resend abuse (minimum 20 seconds wait)
     const existingReq = this.resetRequests.find(r => r.email === cleanEmail && !r.used);
-    if (existingReq && (Date.now() - existingReq.createdAt) < 30000) {
-      const waitSec = Math.ceil((30000 - (Date.now() - existingReq.createdAt)) / 1000);
+    if (existingReq && (Date.now() - existingReq.createdAt) < 20000) {
+      const waitSec = Math.ceil((20000 - (Date.now() - existingReq.createdAt)) / 1000);
       throw new Error(`Por favor espera ${waitSec} segundos antes de solicitar un nuevo código.`);
     }
 
@@ -735,7 +968,7 @@ class DataStore {
 
     const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
     const createdAt = Date.now();
-    const expiresAt = createdAt + 10 * 60 * 1000; // 10 minutes validity
+    const expiresAt = createdAt + 15 * 60 * 1000; // 15 minutes validity
 
     this.resetRequests.push({
       email: cleanEmail,
@@ -744,18 +977,6 @@ class DataStore {
       expiresAt,
       used: false,
       verified: false
-    });
-
-    const timestamp = new Date().toISOString();
-    this.emailLogs.unshift({
-      id: `email-${Date.now()}`,
-      assemblyId: this.assemblies[0]?.id || 'system',
-      recipientEmail: cleanEmail,
-      recipientName: user?.name || owner?.name || 'Usuario',
-      subject: `Código de Recuperación de Contraseña VotoSmart: ${code}`,
-      type: 'password_reset',
-      status: 'sent',
-      sentAt: timestamp
     });
 
     // Mask email for privacy
@@ -767,12 +988,12 @@ class DataStore {
 
     return {
       success: true,
-      code,
+      code, // For server-side dispatch to SMTP only
       email: cleanEmail,
       maskedEmail,
-      userName: user?.name || owner?.name || 'Usuario',
-      expiresInMinutes: 10,
-      message: 'Código enviado correctamente'
+      userName: recipientName,
+      expiresInMinutes: 15,
+      message: `Hemos despachado un código de seguridad a ${maskedEmail}.`
     };
   }
 
@@ -780,20 +1001,24 @@ class DataStore {
     return this.resetRequests;
   }
 
-  verifyResetCode(email: string, code: string) {
-    const cleanEmail = (email || '').trim().toLowerCase();
+  verifyResetCode(identifier: string, code: string) {
+    const clean = (identifier || '').trim().toLowerCase();
     const cleanCode = (code || '').trim().replace(/\D/g, '');
 
-    if (!cleanEmail || !cleanCode) {
+    if (!clean || !cleanCode) {
       throw new Error('El código no es válido');
     }
+
+    let user = this.getUserByEmail(clean) || this.getUserByDocument(clean);
+    let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
+    const cleanEmail = (user?.email || owner?.email || clean).toLowerCase();
 
     const req = this.resetRequests
       .filter((r) => r.email === cleanEmail && !r.used)
       .sort((a, b) => b.createdAt - a.createdAt)[0];
 
     if (!req) {
-      throw new Error('El código no es válido');
+      throw new Error('El código no es válido o ya fue utilizado');
     }
 
     if (Date.now() > req.expiresAt) {
@@ -809,16 +1034,20 @@ class DataStore {
     return { valid: true, message: 'Código verificado con éxito.' };
   }
 
-  resetPassword(email: string, code: string, newPassword?: string) {
-    const cleanEmail = (email || '').trim().toLowerCase();
+  resetPassword(identifier: string, code: string, newPassword?: string) {
+    const clean = (identifier || '').trim().toLowerCase();
     const cleanCode = (code || '').trim().replace(/\D/g, '');
+
+    let user = this.getUserByEmail(clean) || this.getUserByDocument(clean);
+    let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
+    const cleanEmail = (user?.email || owner?.email || clean).toLowerCase();
 
     const req = this.resetRequests
       .filter((r) => r.email === cleanEmail && !r.used)
       .sort((a, b) => b.createdAt - a.createdAt)[0];
 
     if (!req) {
-      throw new Error('El código no es válido');
+      throw new Error('El código no es válido o ya fue utilizado');
     }
 
     if (Date.now() > req.expiresAt) {
@@ -830,23 +1059,20 @@ class DataStore {
       throw new Error('El código no es válido');
     }
 
-    if (!newPassword || newPassword.trim().length < 6) {
-      throw new Error('La nueva contraseña debe tener al menos 6 caracteres.');
-    }
+    assertPasswordPolicy(newPassword || '');
 
     // Invalidate code so it can NEVER be reused
     req.used = true;
 
-    this.userPasswords.set(cleanEmail, newPassword.trim());
+    this.userPasswords.set(cleanEmail, (newPassword || '').trim());
 
-    const user = this.getUserByEmail(cleanEmail);
     if (user) {
       this.addAuditLog(user.id, user.name, user.role, 'CAMBIO_CONTRASEÑA', `Restablecimiento exitoso de contraseña para ${user.email}`);
     }
 
     return {
       success: true,
-      message: 'Contraseña restablecida exitosamente. Ya puede iniciar sesión.'
+      message: 'Contraseña restablecida exitosamente. Ya puede iniciar sesión con su cédula y su nueva contraseña.'
     };
   }
 
