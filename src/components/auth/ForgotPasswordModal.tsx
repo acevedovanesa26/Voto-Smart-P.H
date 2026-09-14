@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Mail, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api } from '../../services/api';
 import { Alert, Button, Modal } from '../common/UIComponents';
 import { PasswordStrengthIndicator, validatePasswordPolicy } from './PasswordStrengthIndicator';
@@ -24,17 +24,33 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [maskedEmail, setMaskedEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   // Sync initial identifier if provided
-  React.useEffect(() => {
-    if (initialIdentifier && !identifier) {
+  useEffect(() => {
+    if (initialIdentifier) {
       setIdentifier(initialIdentifier);
     }
   }, [initialIdentifier]);
+
+  const startCooldown = (seconds = 30) => {
+    setResendCooldown(seconds);
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,8 +62,10 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setError(null);
     try {
       const res = await api.forgotPassword(identifier.trim());
+      if (res.maskedEmail) setMaskedEmail(res.maskedEmail);
       setInfoMessage(res.message || `Hemos enviado un código de seguridad de 6 dígitos a su correo electrónico. Revisa tu bandeja de entrada o spam.`);
       setStep('code');
+      startCooldown(30);
     } catch (err: any) {
       setError(err.message || 'Error al procesar la solicitud');
     } finally {
@@ -55,9 +73,26 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     }
   };
 
+  const handleResendCode = async () => {
+    if (!identifier.trim() || resendCooldown > 0 || isResending) return;
+    setIsResending(true);
+    setError(null);
+    try {
+      const res = await api.forgotPassword(identifier.trim());
+      if (res.maskedEmail) setMaskedEmail(res.maskedEmail);
+      setInfoMessage(`Nuevo código de 6 dígitos despachado exitosamente a ${res.maskedEmail || 'su correo'}. Por favor revise su bandeja de entrada o spam.`);
+      startCooldown(30);
+    } catch (err: any) {
+      setError(err.message || 'Error al reenviar el código');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) {
+    const cleanCode = code.trim().replace(/\D/g, '');
+    if (!cleanCode || cleanCode.length < 4) {
       setError('Por favor ingrese el código de 6 dígitos.');
       return;
     }
@@ -74,7 +109,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      await api.resetPassword(identifier.trim(), code.trim(), newPassword);
+      await api.resetPassword(identifier.trim(), cleanCode, newPassword);
       setStep('success');
     } catch (err: any) {
       setError(err.message || 'Código incorrecto o expirado.');
@@ -89,6 +124,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setCode('');
     setNewPassword('');
     setConfirmPassword('');
+    setMaskedEmail('');
+    setResendCooldown(0);
     setError(null);
     setInfoMessage(null);
   };
@@ -128,7 +165,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 />
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Acepta tu número de cédula o el correo que tienes registrado en la administración.
+                Acepta tu número de cédula de copropietario o el correo que tienes registrado en la administración.
               </p>
             </div>
 
@@ -162,9 +199,20 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             {infoMessage && <Alert type="info">{infoMessage}</Alert>}
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Código de 6 Dígitos
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase">
+                  Código de 6 Dígitos
+                </label>
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0 || isResending}
+                  onClick={handleResendCode}
+                  className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isResending ? 'animate-spin' : ''}`} />
+                  {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar otro código'}
+                </button>
+              </div>
               <input
                 type="text"
                 required
@@ -172,10 +220,10 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="123456"
-                className="w-full px-3 py-2 text-center text-lg tracking-widest font-mono font-bold rounded-xl border border-slate-300 text-slate-900 bg-white"
+                className="w-full px-3 py-2 text-center text-lg tracking-widest font-mono font-bold rounded-xl border border-slate-300 text-slate-900 bg-white focus:ring-2 focus:ring-teal-500"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Ingresa el código que acabamos de enviar a tu correo electrónico registrado.
+                Ingresa el código que acabamos de enviar a {maskedEmail || 'tu correo registrado'}. Revisa bandeja de entrada o spam.
               </p>
             </div>
 
@@ -191,7 +239,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm"
+                    className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm focus:ring-2 focus:ring-teal-500"
                   />
                   <button
                     type="button"
@@ -214,7 +262,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm"
+                    className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-sm focus:ring-2 focus:ring-teal-500"
                   />
                   <button
                     type="button"

@@ -65,7 +65,7 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
 }) => {
   const { user, complex } = useAuth();
   const [assembly, setAssembly] = useState<Assembly | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'quorum' | 'documents' | 'votes' | 'notes' | 'results' | 'minutes' | 'emails' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'quorum' | 'documents' | 'votes' | 'notes' | 'results' | 'minutes' | 'audit'>('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -477,7 +477,6 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
           { id: 'minutes', label: 'Acta Oficial & PDF', icon: <FileCheck2 className="w-4 h-4" /> },
           { id: 'documents', label: `Documentos (${documents.length})`, icon: <Upload className="w-4 h-4" /> },
           { id: 'notes', label: `Bitácora (${notes.length})`, icon: <Sparkles className="w-4 h-4" /> },
-          { id: 'emails', label: 'Envío Correos', icon: <Mail className="w-4 h-4" /> },
           { id: 'audit', label: 'Auditoría', icon: <ShieldCheck className="w-4 h-4" /> }
         ].map((tab) => (
           <button
@@ -1165,59 +1164,7 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
         </div>
       )}
 
-      {/* TAB 8: ENVÍO DE CORREOS */}
-      {activeTab === 'emails' && (
-        <div className="space-y-6 animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Historial y Despacho Masivo de Correos</h3>
-              <p className="text-xs text-slate-500">Envíe convocatorias, resultados oficiales y actas firmadas a los copropietarios.</p>
-            </div>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => setShowSendEmailModal(true)}
-              leftIcon={<Send className="w-4 h-4" />}
-            >
-              Despachar Notificaciones
-            </Button>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">Destinatario</th>
-                  <th className="py-3 px-4">Asunto</th>
-                  <th className="py-3 px-4">Tipo</th>
-                  <th className="py-3 px-4">Estado</th>
-                  <th className="py-3 px-4">Fecha y Hora</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {emailLogs.map((e) => (
-                  <tr key={e.id} className="hover:bg-slate-50">
-                    <td className="py-3 px-4 font-semibold text-slate-800">
-                      <div>{e.recipientName}</div>
-                      <div className="text-[10px] text-slate-600">{e.recipientEmail}</div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">{e.subject}</td>
-                    <td className="py-3 px-4 capitalize">{e.type}</td>
-                    <td className="py-3 px-4">
-                      <Badge variant="emerald" size="sm">Entregado</Badge>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {new Date(e.sentAt).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 9: AUDITORÍA */}
+      {/* TAB 8: AUDITORÍA */}
       {activeTab === 'audit' && (
         <div className="space-y-6 animate-fadeIn">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

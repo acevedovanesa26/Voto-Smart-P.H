@@ -31,17 +31,13 @@ const emailHistory: EmailRecord[] = [];
 // Persistent Singleton SMTP Transporter with direct SSL on port 465
 let cachedTransporter: nodemailer.Transporter | null = null;
 
-// Direct SSL port 465 SMTP service with pooling, tested and verified for Gmail, Outlook, Hotmail, and institutional domains (.edu.co)
-function getTransporter(): nodemailer.Transporter {
-  if (cachedTransporter) {
-    return cachedTransporter;
-  }
-
+// Direct SSL port 465 SMTP service, verified for Gmail, Outlook, Hotmail, and institutional domains (.edu.co)
+function createSmtpTransporter(): nodemailer.Transporter {
   const gmailUser = 'motatovanesa@gmail.com';
   const envPass = process.env.GMAIL_PASS?.replace(/\s+/g, '');
   const cleanPass = (envPass && envPass.length === 16) ? envPass : 'wxjokjgignqlszdc';
 
-  cachedTransporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true, // true for port 465 SSL direct
@@ -49,15 +45,12 @@ function getTransporter(): nodemailer.Transporter {
       user: gmailUser,
       pass: cleanPass
     },
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
-    connectionTimeout: 10000,
-    greetingTimeout: 8000,
-    socketTimeout: 15000
-  });
-
-  return cachedTransporter;
+    // Avoid socket stagnation in container environments by not pooling
+    pool: false,
+    connectionTimeout: 12000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000
+  } as any);
 }
 
 export async function dispatchEmail(options: SendEmailOptions): Promise<{
@@ -68,10 +61,6 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
   message: string;
 }> {
   const id = `mail-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const timestamp = new Date().toISOString();
-  const transporter = getTransporter();
-
-  // Normalize recipient email and name
   const cleanTo = (options.to || '').trim().toLowerCase();
   const cleanToName = (options.toName || '').trim();
 
@@ -85,45 +74,47 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
 
   let deliveryMode: 'real_smtp' | 'sandbox_inbox' = 'sandbox_inbox';
   let messageId = id;
-  let status: 'sent' | 'delivered' = 'sent';
   let lastError: string | undefined;
 
-  if (transporter && cleanTo) {
+  if (cleanTo) {
     const startTime = Date.now();
-    try {
-      // Direct, RFC-compliant delivery without spam-triggering custom headers
-      const info = await transporter.sendMail({
-        from: '"VotoSmart Colombia" <motatovanesa@gmail.com>',
-        to: cleanToName ? `"${cleanToName}" <${cleanTo}>` : cleanTo,
-        replyTo: 'motatovanesa@gmail.com',
-        subject: options.subject,
-        text: plainText,
-        html: options.html
-      });
+    // Try sending with direct connection, retry once on transient socket drop
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const transporter = createSmtpTransporter();
+        const info = await transporter.sendMail({
+          from: '"VotoSmart Colombia" <motatovanesa@gmail.com>',
+          to: cleanToName ? `"${cleanToName}" <${cleanTo}>` : cleanTo,
+          replyTo: 'motatovanesa@gmail.com',
+          subject: options.subject,
+          text: plainText,
+          html: options.html
+        });
 
-      const duration = Date.now() - startTime;
-      messageId = info.messageId || id;
-      deliveryMode = 'real_smtp';
-      status = 'delivered';
-      console.log(`[EmailService] Correo entregado exitosamente a ${cleanTo} en ${duration}ms (ID: ${messageId})`);
-    } catch (err: any) {
-      lastError = err.message;
-      const duration = Date.now() - startTime;
-      console.warn(`[EmailService] Nota en despacho directo a ${cleanTo} tras ${duration}ms (${err.message}). Registrado en historial.`);
-      deliveryMode = 'sandbox_inbox';
-      // If cached transporter failed on socket, reset cache so next call creates fresh connection
-      cachedTransporter = null;
+        const duration = Date.now() - startTime;
+        messageId = info.messageId || id;
+        deliveryMode = 'real_smtp';
+        console.log(`[EmailService] Correo entregado exitosamente a ${cleanTo} en ${duration}ms (ID: ${messageId}) [intento ${attempt}]`);
+        break; // Successfully sent
+      } catch (err: any) {
+        lastError = err.message;
+        console.warn(`[EmailService] Intento ${attempt} falló para ${cleanTo}: ${err.message}`);
+        if (attempt === 1) {
+          // Brief 300ms pause before retry
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
     }
   }
 
   // Security: Do NOT store sensitive codes, passwords, or full HTML templates in any accessible logs
   return {
-    success: true,
+    success: deliveryMode === 'real_smtp',
     messageId,
     deliveryMode,
     message: deliveryMode === 'real_smtp' 
       ? `Correo electrónico despachado exitosamente a ${cleanTo}.`
-      : `Notificación procesada para ${cleanTo}.`
+      : `No se pudo entregar por SMTP directo (${lastError || 'servidor no disponible'}).`
   };
 }
 
@@ -142,7 +133,7 @@ export function clearEmailHistory() {
 export async function verifySmtpConnection(): Promise<{ success: boolean; message: string; durationMs: number }> {
   const start = Date.now();
   try {
-    const transporter = getTransporter();
+    const transporter = createSmtpTransporter();
     await transporter.verify();
     const duration = Date.now() - start;
     return {

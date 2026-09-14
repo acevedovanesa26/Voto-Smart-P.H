@@ -317,19 +317,13 @@ class DataStore {
     const status = this.checkVoterStatus(documentNumber);
     const email = status.email;
 
-    // Cooldown check
-    const existingReq = this.resetRequests.find(r => r.email.toLowerCase() === email.toLowerCase() && !r.used);
-    if (existingReq && (Date.now() - existingReq.createdAt) < 20000) {
-      const waitSec = Math.ceil((20000 - (Date.now() - existingReq.createdAt)) / 1000);
-      throw new Error(`Por favor espera ${waitSec} segundos antes de solicitar un nuevo código.`);
+    // Light debounce: only prevent immediate 1-second double clicks
+    const latestReq = this.resetRequests
+      .filter((r) => r.email.toLowerCase() === email.toLowerCase())
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (latestReq && (Date.now() - latestReq.createdAt) < 1500) {
+      throw new Error('Por favor espera un momento antes de solicitar un nuevo código.');
     }
-
-    // Invalidate existing unused codes
-    this.resetRequests.forEach((r) => {
-      if (r.email.toLowerCase() === email.toLowerCase()) {
-        r.used = true;
-      }
-    });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const createdAt = Date.now();
@@ -337,7 +331,7 @@ class DataStore {
       email: email.toLowerCase(),
       code,
       createdAt,
-      expiresAt: createdAt + 15 * 60 * 1000,
+      expiresAt: createdAt + 15 * 60 * 1000, // 15 minutes validity
       used: false,
       verified: false
     });
@@ -372,21 +366,28 @@ class DataStore {
     const status = this.checkVoterStatus(cleanDoc);
     const email = status.email;
 
+    // Match ANY active unexpired code requested by this user within 15 minutes
     const req = this.resetRequests.find(
-      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && !r.used
+      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && !r.used && Date.now() <= r.expiresAt
     );
 
     if (!req) {
+      // Check if expired
+      const expiredReq = this.resetRequests.find(
+        (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && Date.now() > r.expiresAt
+      );
+      if (expiredReq) {
+        throw new Error('El código de verificación ha expirado. Por favor solicite uno nuevo.');
+      }
       throw new Error('El código ingresado es incorrecto o ya ha sido utilizado.');
     }
 
-    if (Date.now() > req.expiresAt) {
-      req.used = true;
-      throw new Error('El código de verificación ha expirado. Por favor solicite uno nuevo.');
-    }
-
-    // Invalidate code so it can never be reused
-    req.used = true;
+    // Invalidate this code and all pending codes for this user
+    this.resetRequests.forEach((r) => {
+      if (r.email.toLowerCase() === email.toLowerCase()) {
+        r.used = true;
+      }
+    });
     req.verified = true;
 
     // Set user password
@@ -507,7 +508,6 @@ class DataStore {
     
     // Store OTP
     const createdAt = Date.now();
-    this.resetRequests = this.resetRequests.filter((r) => r.email.toLowerCase() !== email.toLowerCase());
     this.resetRequests.push({
       email: email.toLowerCase(),
       code,
@@ -569,13 +569,18 @@ class DataStore {
       throw new Error('No se encontró el registro del votante en el sistema.');
     }
 
+    // Match any unexpired, unused code generated for this email
     const req = this.resetRequests.find(
-      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode
+      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && !r.used && Date.now() <= r.expiresAt
     );
 
     if (!req) {
       throw new Error('El código ingresado es incorrecto o ha caducado. Por favor verifique en su correo electrónico o solicite uno nuevo.');
     }
+
+    // Invalidate used code
+    req.used = true;
+    req.verified = true;
 
     // If user doesn't exist in users array yet, create one from owner
     if (!user && owner) {
@@ -952,19 +957,13 @@ class DataStore {
       this.users.push(user);
     }
 
-    // Cooldown check: prevent rapid resend abuse (minimum 20 seconds wait)
-    const existingReq = this.resetRequests.find(r => r.email === cleanEmail && !r.used);
-    if (existingReq && (Date.now() - existingReq.createdAt) < 20000) {
-      const waitSec = Math.ceil((20000 - (Date.now() - existingReq.createdAt)) / 1000);
-      throw new Error(`Por favor espera ${waitSec} segundos antes de solicitar un nuevo código.`);
+    // Light debounce: only prevent immediate 1-second double clicks
+    const latestReq = this.resetRequests
+      .filter((r) => r.email === cleanEmail)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (latestReq && (Date.now() - latestReq.createdAt) < 1500) {
+      throw new Error('Por favor espera un momento antes de solicitar un nuevo código.');
     }
-
-    // Invalidate any existing unused codes for this email
-    this.resetRequests.forEach((r) => {
-      if (r.email === cleanEmail) {
-        r.used = true;
-      }
-    });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
     const createdAt = Date.now();
@@ -1013,21 +1012,19 @@ class DataStore {
     let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
     const cleanEmail = (user?.email || owner?.email || clean).toLowerCase();
 
-    const req = this.resetRequests
-      .filter((r) => r.email === cleanEmail && !r.used)
-      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    // Match any unexpired, unused code generated for this user
+    const req = this.resetRequests.find(
+      (r) => r.email === cleanEmail && !r.used && r.code === cleanCode && Date.now() <= r.expiresAt
+    );
 
     if (!req) {
-      throw new Error('El código no es válido o ya fue utilizado');
-    }
-
-    if (Date.now() > req.expiresAt) {
-      req.used = true;
-      throw new Error('El código ha vencido');
-    }
-
-    if (req.code !== cleanCode) {
-      throw new Error('El código no es válido');
+      const expiredReq = this.resetRequests.find(
+        (r) => r.email === cleanEmail && r.code === cleanCode && Date.now() > r.expiresAt
+      );
+      if (expiredReq) {
+        throw new Error('El código ha vencido. Por favor solicite uno nuevo.');
+      }
+      throw new Error('El código no es válido o ya fue utilizado.');
     }
 
     req.verified = true;
@@ -1042,27 +1039,30 @@ class DataStore {
     let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
     const cleanEmail = (user?.email || owner?.email || clean).toLowerCase();
 
-    const req = this.resetRequests
-      .filter((r) => r.email === cleanEmail && !r.used)
-      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    // Match any unexpired, unused code generated for this user
+    const req = this.resetRequests.find(
+      (r) => r.email === cleanEmail && !r.used && r.code === cleanCode && Date.now() <= r.expiresAt
+    );
 
     if (!req) {
-      throw new Error('El código no es válido o ya fue utilizado');
-    }
-
-    if (Date.now() > req.expiresAt) {
-      req.used = true;
-      throw new Error('El código ha vencido');
-    }
-
-    if (req.code !== cleanCode) {
-      throw new Error('El código no es válido');
+      const expiredReq = this.resetRequests.find(
+        (r) => r.email === cleanEmail && r.code === cleanCode && Date.now() > r.expiresAt
+      );
+      if (expiredReq) {
+        throw new Error('El código ha vencido. Por favor solicite uno nuevo.');
+      }
+      throw new Error('El código no es válido o ya fue utilizado.');
     }
 
     assertPasswordPolicy(newPassword || '');
 
-    // Invalidate code so it can NEVER be reused
-    req.used = true;
+    // Invalidate code and pending requests for this email
+    this.resetRequests.forEach((r) => {
+      if (r.email === cleanEmail) {
+        r.used = true;
+      }
+    });
+    req.verified = true;
 
     this.userPasswords.set(cleanEmail, (newPassword || '').trim());
 

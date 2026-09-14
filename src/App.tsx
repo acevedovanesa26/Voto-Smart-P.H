@@ -25,6 +25,7 @@ function MainContent() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [forgotPasswordIdentifier, setForgotPasswordIdentifier] = useState('');
   const [showComplexModal, setShowComplexModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -52,7 +53,10 @@ function MainContent() {
           <RoleDecisionView
             onEnterAdmin={() => setCurrentView('dashboard')}
             onEnterVoter={() => setCurrentView('voter')}
-            onOpenForgotPassword={() => setShowForgotPasswordModal(true)}
+            onOpenForgotPassword={(initialId?: string) => {
+              setForgotPasswordIdentifier(initialId || '');
+              setShowForgotPasswordModal(true);
+            }}
             onOpenRegister={() => setShowRegisterModal(true)}
             onOpenComplexSwitcher={() => setShowComplexModal(true)}
           />
@@ -100,7 +104,8 @@ function MainContent() {
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
-        onOpenForgotPassword={() => {
+        onOpenForgotPassword={(initialId?: string) => {
+          setForgotPasswordIdentifier(initialId || '');
           setShowLoginModal(false);
           setShowForgotPasswordModal(true);
         }}
@@ -124,7 +129,11 @@ function MainContent() {
 
       <ForgotPasswordModal
         isOpen={showForgotPasswordModal}
-        onClose={() => setShowForgotPasswordModal(false)}
+        initialIdentifier={forgotPasswordIdentifier}
+        onClose={() => {
+          setShowForgotPasswordModal(false);
+          setForgotPasswordIdentifier('');
+        }}
         onBackToLogin={() => {
           setShowForgotPasswordModal(false);
           setShowLoginModal(true);

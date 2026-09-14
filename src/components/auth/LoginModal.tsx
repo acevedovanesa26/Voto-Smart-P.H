@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  ChevronRight,
   Eye,
   EyeOff,
   KeyRound,
@@ -10,6 +11,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   UserCheck,
   UserPlus,
   Vote
@@ -17,11 +19,12 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { Alert, Badge, Button, Modal } from '../common/UIComponents';
+import { PasswordStrengthIndicator, validatePasswordPolicy } from './PasswordStrengthIndicator';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenForgotPassword: () => void;
+  onOpenForgotPassword: (initialIdentifier?: string) => void;
   onOpenRegister?: () => void;
   initialRole?: 'admin' | 'voter';
   onSuccessLogin?: (role: 'admin' | 'owner') => void;
@@ -35,7 +38,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   initialRole = 'voter',
   onSuccessLogin
 }) => {
-  const { login, loginVoterWithOtp, complex } = useAuth();
+  const { login, loginVoterWithOtp, registerVoterPassword, complex } = useAuth();
   const [activeTab, setActiveTab] = useState<'voter' | 'admin'>(initialRole);
 
   // Admin credentials
@@ -43,17 +46,48 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
-  // Voter OTP credentials (Cedula -> Code from email)
+  // Voter sub-mode: 'password' | 'activate' | 'otp'
+  const [voterSubMode, setVoterSubMode] = useState<'password' | 'activate' | 'otp'>('password');
+
+  // Voter credentials
   const [voterCedula, setVoterCedula] = useState('');
+  const [voterPassword, setVoterPassword] = useState('');
+  const [showVoterPassword, setShowVoterPassword] = useState(false);
+
+  // Voter Activation (Cédula -> Código -> Contraseña)
+  const [activateStep, setActivateStep] = useState<'request' | 'verify'>('request');
+  const [activationCode, setActivationCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Voter OTP (Temporal)
   const [otpStep, setOtpStep] = useState<'request' | 'verify'>('request');
   const [otpCode, setOtpCode] = useState('');
+
+  // Shared voter metadata
   const [maskedEmail, setMaskedEmail] = useState('');
   const [voterName, setVoterName] = useState('');
   const [voterApto, setVoterApto] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const startCooldown = (seconds = 30) => {
+    setResendCooldown(seconds);
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // Admin login handler
   const handleAdminSubmit = async (e: React.FormEvent) => {
@@ -79,12 +113,100 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  // Voter step 1: Request OTP with Cedula
-  const handleRequestOtp = async (cedulaToUse?: string, e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const doc = (cedulaToUse || voterCedula).trim();
+  // Voter login with Password
+  const handleVoterPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const doc = voterCedula.trim();
     if (!doc) {
-      setError('Por favor ingrese su número de cédula o documento de identidad.');
+      setError('Por favor ingrese su número de cédula.');
+      return;
+    }
+    if (!voterPassword.trim()) {
+      setError('Por favor ingrese su contraseña.');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      await login(doc, voterPassword.trim());
+      onClose();
+      if (onSuccessLogin) onSuccessLogin('owner');
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('contraseña') || msg.toLowerCase().includes('credenciales')) {
+        setError(`${msg} Si aún no has registrado tu contraseña o es tu primera vez, puedes activarla haciendo clic en "Crear o Activar Contraseña" abajo.`);
+      } else {
+        setError(msg || 'Error al iniciar sesión.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Voter Request Activation Code
+  const handleRequestActivation = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const doc = voterCedula.trim();
+    if (!doc) {
+      setError('Por favor ingrese su número de cédula.');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await api.requestVoterActivation(doc);
+      setMaskedEmail(res.maskedEmail);
+      setVoterName(res.name);
+      setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
+      setActivationCode('');
+      setActivateStep('verify');
+      setSuccessMessage(`Hemos enviado un código de 6 dígitos al correo registrado ${res.maskedEmail}.`);
+      startCooldown(30);
+    } catch (err: any) {
+      setError(err.message || 'No se encontró la cédula en el censo.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Voter Register Password
+  const handleRegisterPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const doc = voterCedula.trim();
+    const code = activationCode.trim().replace(/\D/g, '');
+    if (!code || code.length < 4) {
+      setError('Por favor ingrese el código de 6 dígitos recibido.');
+      return;
+    }
+    const validation = validatePasswordPolicy(newPassword);
+    if (!validation.isValid) {
+      setError(validation.errorMessage || 'La contraseña no cumple con la política de seguridad.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Las contraseñas no coinciden.');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      await registerVoterPassword(doc, code, newPassword);
+      onClose();
+      if (onSuccessLogin) onSuccessLogin('owner');
+    } catch (err: any) {
+      setError(err.message || 'Código incorrecto o expirado.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Voter Temporary OTP Request
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const doc = voterCedula.trim();
+    if (!doc) {
+      setError('Por favor ingrese su número de cédula.');
       return;
     }
     setIsLoading(true);
@@ -97,15 +219,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
       setOtpCode('');
       setOtpStep('verify');
-      setSuccessMessage(`Hemos enviado su código de seguridad al correo ${res.maskedEmail}. Por favor revise su bandeja de entrada o spam.`);
+      setSuccessMessage(`Código enviado al correo ${res.maskedEmail}.`);
+      startCooldown(30);
     } catch (err: any) {
-      setError(err.message || 'No se encontró la cédula en el censo del conjunto.');
+      setError(err.message || 'No se encontró la cédula en el censo.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Voter step 2: Verify OTP
+  // Voter Temporary OTP Verify
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const codeToVerify = otpCode.trim();
@@ -124,13 +247,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleResetVoterForm = () => {
-    setOtpStep('request');
-    setOtpCode('');
-    setError(null);
-    setSuccessMessage(null);
   };
 
   return (
@@ -152,7 +268,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             }`}
           >
             <Vote className={`w-4 h-4 ${activeTab === 'voter' ? 'text-teal-600' : ''}`} />
-            <span>Ingreso Votante (Cédula)</span>
+            <span>Ingreso Votante</span>
           </button>
 
           <button
@@ -195,21 +311,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         )}
         {successMessage && <Alert type="success">{successMessage}</Alert>}
 
-        {/* TAB 1: VOTER / OWNER ACCESS BY CÉDULA + EMAIL CODE */}
+        {/* TAB 1: VOTER ACCESS */}
         {activeTab === 'voter' && (
           <div className="space-y-4">
-            {otpStep === 'request' ? (
-              <form onSubmit={(e) => handleRequestOtp(undefined, e)} className="space-y-3.5">
-                <div className="p-3 bg-teal-50/70 rounded-xl border border-teal-200/80 text-teal-900">
-                  <p className="font-semibold text-xs flex items-center gap-1.5">
-                    <UserCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
-                    <span>Acceso para Copropietarios y Apoderados</span>
-                  </p>
-                  <p className="text-[11px] text-teal-800 mt-1">
-                    Ingrese su número de cédula o documento registrado. Le enviaremos un código de seguridad instantáneo a su correo electrónico.
-                  </p>
-                </div>
-
+            {/* VOTER MODE 1: PASSWORD */}
+            {voterSubMode === 'password' && (
+              <form onSubmit={handleVoterPasswordSubmit} className="space-y-3.5">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                     Número de Cédula / Documento de Identidad
@@ -227,73 +334,350 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </div>
                 </div>
 
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Contraseña
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenForgotPassword(voterCedula);
+                      }}
+                      className="text-xs font-semibold text-teal-600 hover:underline"
+                    >
+                      ¿Olvidó contraseña?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showVoterPassword ? 'text' : 'password'}
+                      required
+                      value={voterPassword}
+                      onChange={(e) => setVoterPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowVoterPassword(!showVoterPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    >
+                      {showVoterPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
                 <Button
                   type="submit"
                   size="md"
                   className="w-full bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
                   isLoading={isLoading}
                 >
-                  Solicitar Código de Acceso
+                  Ingresar a Votar
                 </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-3.5">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800 text-xs">{voterName}</span>
-                    {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
+
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="p-2.5 bg-teal-50/70 rounded-xl border border-teal-200 text-center">
+                    <p className="text-[11px] text-teal-900 mb-1">¿Primera vez o sin contraseña?</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterSubMode('activate');
+                        setActivateStep('request');
+                        setError(null);
+                        setSuccessMessage(null);
+                      }}
+                      className="w-full py-1.5 px-3 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Crear o Activar Contraseña con Código a tu Correo</span>
+                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-600">
-                    Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
-                  </p>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Código de 6 Dígitos
-                  </label>
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123456"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold"
-                    />
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoterSubMode('otp');
+                        setOtpStep('request');
+                        setError(null);
+                        setSuccessMessage(null);
+                      }}
+                      className="text-xs text-slate-500 hover:text-teal-700 font-medium hover:underline"
+                    >
+                      O ingresar con código temporal sin contraseña
+                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Revise su bandeja de entrada o spam en <strong>{maskedEmail}</strong> e ingrese el código de 6 dígitos.
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetVoterForm}
-                    className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Cambiar Cédula</span>
-                  </button>
-
-                  <Button
-                    type="submit"
-                    size="md"
-                    className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold text-sm"
-                    isLoading={isLoading}
-                  >
-                    Ingresar a Votar
-                  </Button>
                 </div>
               </form>
+            )}
+
+            {/* VOTER MODE 2: ACTIVATE ACCOUNT / REGISTER PASSWORD */}
+            {voterSubMode === 'activate' && (
+              <div className="space-y-3.5">
+                {activateStep === 'request' ? (
+                  <form onSubmit={handleRequestActivation} className="space-y-3.5">
+                    <div className="p-2.5 bg-teal-50/70 rounded-xl border border-teal-200 text-teal-900 text-xs">
+                      Ingrese su cédula. Recibirá un código de 6 dígitos a su correo electrónico para crear su contraseña.
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Cédula de Copropietario
+                      </label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={voterCedula}
+                          onChange={(e) => setVoterCedula(e.target.value)}
+                          placeholder="ej: 12345678"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVoterSubMode('password')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+                        isLoading={isLoading}
+                      >
+                        Enviar Código al Correo
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleRegisterPassword} className="space-y-3">
+                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                      <p className="font-bold text-slate-900">{voterName} {voterApto && `(${voterApto})`}</p>
+                      <p className="text-[11px] text-slate-600">Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong></p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700 uppercase">
+                          Código de 6 Dígitos
+                        </label>
+                        <button
+                          type="button"
+                          disabled={resendCooldown > 0 || isLoading}
+                          onClick={() => handleRequestActivation()}
+                          className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                          {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={activationCode}
+                        onChange={(e) => setActivationCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="123456"
+                        className="w-full px-3 py-2 text-center text-lg tracking-widest font-mono font-bold rounded-xl border border-slate-300 text-slate-900 bg-white focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                          Crear Contraseña
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showNewPassword ? 'text' : 'password'}
+                            required
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full pl-2.5 pr-7 py-1.5 rounded-xl border border-slate-300 text-slate-900 bg-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+                          >
+                            {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                          Confirmar
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            required
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full pl-2.5 pr-7 py-1.5 rounded-xl border border-slate-300 text-slate-900 bg-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+                          >
+                            {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {newPassword && <PasswordStrengthIndicator password={newPassword} />}
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setActivateStep('request')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold text-sm"
+                        isLoading={isLoading}
+                      >
+                        Registrar e Ingresar
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* VOTER MODE 3: TEMPORARY OTP */}
+            {voterSubMode === 'otp' && (
+              <div className="space-y-3.5">
+                {otpStep === 'request' ? (
+                  <form onSubmit={handleRequestOtp} className="space-y-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Cédula de Copropietario
+                      </label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={voterCedula}
+                          onChange={(e) => setVoterCedula(e.target.value)}
+                          placeholder="ej: 12345678"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVoterSubMode('password')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+                        isLoading={isLoading}
+                      >
+                        Solicitar Código
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOtp} className="space-y-3.5">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-slate-800 text-xs">{voterName}</span>
+                        {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700 uppercase">
+                          Código de 6 Dígitos
+                        </label>
+                        <button
+                          type="button"
+                          disabled={resendCooldown > 0 || isLoading}
+                          onClick={() => handleRequestOtp()}
+                          className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                          {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                          placeholder="123456"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOtpStep('request')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold text-sm"
+                        isLoading={isLoading}
+                      >
+                        Ingresar a Votar
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
             )}
           </div>
         )}
 
-        {/* TAB 2: ADMINISTRATOR / DIGNITARIES */}
+        {/* TAB 2: ADMINISTRATOR */}
         {activeTab === 'admin' && (
           <form onSubmit={handleAdminSubmit} className="space-y-3.5">
             <div>
@@ -322,7 +706,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   type="button"
                   onClick={() => {
                     onClose();
-                    onOpenForgotPassword();
+                    onOpenForgotPassword(adminEmail);
                   }}
                   className="text-xs font-semibold text-teal-600 hover:underline"
                 >
@@ -359,7 +743,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <Button
               type="submit"
               size="md"
-              className="w-full bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 text-sm"
               isLoading={isLoading}
             >
               Ingresar al Panel de Control

@@ -21,11 +21,12 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { Alert, Badge, Button, Card } from '../common/UIComponents';
+import { PasswordStrengthIndicator, validatePasswordPolicy } from './PasswordStrengthIndicator';
 
 interface RoleDecisionViewProps {
   onEnterAdmin: () => void;
   onEnterVoter: () => void;
-  onOpenForgotPassword: () => void;
+  onOpenForgotPassword: (initialIdentifier?: string) => void;
   onOpenRegister: () => void;
   onOpenComplexSwitcher?: () => void;
 }
@@ -36,29 +37,61 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   onOpenForgotPassword,
   onOpenRegister
 }) => {
-  const { login, loginVoterWithOtp, complex } = useAuth();
+  const { login, loginVoterWithOtp, registerVoterPassword, complex } = useAuth();
 
   // Admin form state
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
-  // Voter OTP state (Cédula -> Código enviado al Correo)
+  // Voter Mode: 'password' (default) | 'activate' (first-time password setup) | 'otp' (temporary code)
+  const [voterMode, setVoterMode] = useState<'password' | 'activate' | 'otp'>('password');
+
+  // Voter password login state
   const [voterCedula, setVoterCedula] = useState('');
+  const [voterPassword, setVoterPassword] = useState('');
+  const [showVoterPassword, setShowVoterPassword] = useState(false);
+
+  // Voter activation state (Cédula -> Código a correo -> Nueva Contraseña)
+  const [activateStep, setActivateStep] = useState<'request' | 'verify'>('request');
+  const [activationCode, setActivationCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Voter OTP state (Acceso temporal sin contraseña)
   const [otpStep, setOtpStep] = useState<'request' | 'verify'>('request');
   const [otpCode, setOtpCode] = useState('');
+
+  // Shared voter metadata
   const [maskedEmail, setMaskedEmail] = useState('');
   const [voterName, setVoterName] = useState('');
   const [voterApto, setVoterApto] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Loading and alerts
   const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
   const [isLoadingVoter, setIsLoadingVoter] = useState(false);
   const [errorAdmin, setErrorAdmin] = useState<string | null>(null);
   const [errorVoter, setErrorVoter] = useState<string | null>(null);
   const [successVoter, setSuccessVoter] = useState<string | null>(null);
 
-  // Admin Login
+  // Start cooldown timer for resend buttons
+  const startCooldown = (seconds = 30) => {
+    setResendCooldown(seconds);
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // 1. Admin Login
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminEmail.trim()) {
@@ -81,10 +114,106 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
     }
   };
 
-  // Voter Request OTP
-  const handleRequestOtp = async (cedulaToUse?: string, e?: React.FormEvent) => {
+  // 2. Voter Login with Password
+  const handleVoterPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const doc = voterCedula.trim();
+    if (!doc) {
+      setErrorVoter('Por favor ingrese su número de cédula o documento de identidad.');
+      return;
+    }
+    if (!voterPassword.trim()) {
+      setErrorVoter('Por favor ingrese su contraseña.');
+      return;
+    }
+
+    setIsLoadingVoter(true);
+    setErrorVoter(null);
+    try {
+      await login(doc, voterPassword.trim());
+      onEnterVoter();
+    } catch (err: any) {
+      // Check if user has no password yet
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('contraseña') || msg.toLowerCase().includes('credenciales')) {
+        setErrorVoter(`${msg} Si aún no has registrado tu contraseña o es tu primera vez, puedes activarla con el botón "Activar o Crear Contraseña" más abajo.`);
+      } else {
+        setErrorVoter(msg || 'Error al iniciar sesión. Verifique sus datos.');
+      }
+    } finally {
+      setIsLoadingVoter(false);
+    }
+  };
+
+  // 3. Voter Request Activation Code (to register password)
+  const handleRequestActivation = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const doc = (cedulaToUse || voterCedula).trim();
+    const doc = voterCedula.trim();
+    if (!doc) {
+      setErrorVoter('Por favor ingrese su número de cédula o documento de identidad.');
+      return;
+    }
+
+    setIsLoadingVoter(true);
+    setErrorVoter(null);
+    setSuccessVoter(null);
+    try {
+      const res = await api.requestVoterActivation(doc);
+      setMaskedEmail(res.maskedEmail);
+      setVoterName(res.name);
+      setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
+      setActivationCode('');
+      setActivateStep('verify');
+      setSuccessVoter(`Hemos enviado un código de verificación de 6 dígitos a ${res.maskedEmail}. Revise su bandeja de entrada o carpeta de spam.`);
+      startCooldown(30);
+    } catch (err: any) {
+      setErrorVoter(err.message || 'No se encontró la cédula en el censo de copropietarios.');
+    } finally {
+      setIsLoadingVoter(false);
+    }
+  };
+
+  // 4. Voter Register Password with Code
+  const handleRegisterPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const doc = voterCedula.trim();
+    const code = activationCode.trim().replace(/\D/g, '');
+
+    if (!code || code.length < 4) {
+      setErrorVoter('Por favor ingrese el código de 6 dígitos recibido en su correo.');
+      return;
+    }
+
+    const validation = validatePasswordPolicy(newPassword);
+    if (!validation.isValid) {
+      setErrorVoter(validation.errorMessage || 'La contraseña no cumple con los requisitos mínimos de seguridad.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorVoter('Las contraseñas no coinciden. Por favor verifíquelas.');
+      return;
+    }
+
+    setIsLoadingVoter(true);
+    setErrorVoter(null);
+    try {
+      await registerVoterPassword(doc, code, newPassword);
+      setSuccessVoter('¡Contraseña registrada exitosamente! Ingresando a la sala de votación...');
+      setTimeout(() => {
+        onEnterVoter();
+      }, 500);
+    } catch (err: any) {
+      setErrorVoter(err.message || 'Código de verificación incorrecto o expirado.');
+    } finally {
+      setIsLoadingVoter(false);
+    }
+  };
+
+  // 5. Voter Temporary OTP Request
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const doc = voterCedula.trim();
     if (!doc) {
       setErrorVoter('Por favor ingrese su número de cédula o documento de identidad.');
       return;
@@ -99,17 +228,8 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
       setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
       setOtpCode('');
       setOtpStep('verify');
-      setSuccessVoter(`Hemos enviado su código de seguridad de 6 dígitos al correo registrado ${res.maskedEmail}. Por favor revise su bandeja de entrada o spam.`);
-      setResendCooldown(30);
-      const timer = setInterval(() => {
-        setResendCooldown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      setSuccessVoter(`Hemos enviado un código temporal de 6 dígitos a ${res.maskedEmail}. Revise su correo.`);
+      startCooldown(30);
     } catch (err: any) {
       setErrorVoter(err.message || 'No se encontró la cédula en el censo del conjunto.');
     } finally {
@@ -117,7 +237,7 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
     }
   };
 
-  // Voter Verify OTP
+  // 6. Voter Temporary OTP Verify
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const codeToVerify = otpCode.trim();
@@ -137,9 +257,14 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
     }
   };
 
-  const handleResetVoter = () => {
+  const handleResetVoterMode = (mode: 'password' | 'activate' | 'otp') => {
+    setVoterMode(mode);
+    setActivateStep('request');
     setOtpStep('request');
+    setActivationCode('');
     setOtpCode('');
+    setNewPassword('');
+    setConfirmPassword('');
     setErrorVoter(null);
     setSuccessVoter(null);
   };
@@ -167,22 +292,26 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
 
       {/* Dual Access Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-        {/* CARD 1: VOTER ACCESS (CÉDULA + CÓDIGO) */}
+        {/* CARD 1: VOTER ACCESS (CÉDULA + CONTRASEÑA O ACTIVACIÓN POR CÓDIGO A CORREO) */}
         <Card className="p-4 sm:p-8 flex flex-col justify-between border-2 border-teal-500 shadow-lg shadow-teal-500/5 bg-white">
           <div className="space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shadow-xs">
-              <Vote className="w-7 h-7" />
+            <div className="flex items-center justify-between">
+              <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shadow-xs">
+                <Vote className="w-7 h-7" />
+              </div>
+              {voterMode === 'password' && <Badge variant="teal" size="sm">Cédula + Contraseña</Badge>}
+              {voterMode === 'activate' && <Badge variant="teal" size="sm">Crear Contraseña</Badge>}
+              {voterMode === 'otp' && <Badge variant="teal" size="sm">Código Temporal</Badge>}
             </div>
 
             <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">
-                  Ingreso Copropietario / Votante
-                </h2>
-                <Badge variant="teal" size="sm">Cédula + Código</Badge>
-              </div>
+              <h2 className="text-xl font-bold text-slate-900">
+                Ingreso Copropietario / Votante
+              </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Ingrese con su número de cédula. Se enviará un código de verificación seguro a su correo electrónico registrado para habilitar su voto.
+                {voterMode === 'password' && 'Ingrese con su cédula y contraseña personal. Si es su primera vez, active su cuenta con el código a su correo.'}
+                {voterMode === 'activate' && 'Active su cuenta: ingrese su cédula para recibir un código de seguridad a su correo y crear su contraseña.'}
+                {voterMode === 'otp' && 'Acceda de manera rápida solicitando un código de acceso de 6 dígitos que llegará directo a su correo registrado.'}
               </p>
             </div>
 
@@ -190,7 +319,7 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
               <div className="space-y-2">
                 <Alert type="error">{errorVoter}</Alert>
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
-                  <span className="text-[11px] leading-tight">¿Tu cédula no aparece en el censo aún?</span>
+                  <span className="text-[11px] leading-tight">¿Tu cédula aún no está en el censo?</span>
                   <button
                     type="button"
                     onClick={onOpenRegister}
@@ -201,11 +330,12 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                 </div>
               </div>
             )}
+
             {successVoter && <Alert type="success">{successVoter}</Alert>}
 
-            {/* Step 1: Document Request */}
-            {otpStep === 'request' ? (
-              <form onSubmit={(e) => handleRequestOtp(undefined, e)} className="space-y-3.5 pt-2 text-xs">
+            {/* --- VOTER MODE 1: LOGIN WITH PASSWORD (DEFAULT) --- */}
+            {voterMode === 'password' && (
+              <form onSubmit={handleVoterPasswordSubmit} className="space-y-3.5 pt-2 text-xs">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase mb-1">
                     Número de Cédula / Documento de Identidad
@@ -223,6 +353,40 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                   </div>
                 </div>
 
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 uppercase">
+                      Contraseña
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => onOpenForgotPassword(voterCedula)}
+                      className="text-xs font-semibold text-teal-600 hover:underline"
+                    >
+                      ¿Olvidó contraseña?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showVoterPassword ? 'text' : 'password'}
+                      required
+                      value={voterPassword}
+                      onChange={(e) => setVoterPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowVoterPassword(!showVoterPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      aria-label={showVoterPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showVoterPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
                 <Button
                   type="submit"
                   size="md"
@@ -230,74 +394,326 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                   isLoading={isLoadingVoter}
                   rightIcon={<ChevronRight className="w-4 h-4" />}
                 >
-                  Solicitar Código al Correo
+                  Ingresar a Sala de Votación
                 </Button>
-              </form>
-            ) : (
-              /* Step 2: Code Verification */
-              <form onSubmit={handleVerifyOtp} className="space-y-3.5 pt-2 text-xs">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-900">{voterName}</span>
-                    {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Código enviado al correo registrado: <strong className="text-teal-700">{maskedEmail}</strong>
-                  </p>
-                </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-slate-700 uppercase">
-                      Código de 6 Dígitos
-                    </label>
+                {/* Switcher to Activation or OTP */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-200 text-center">
+                    <p className="text-[11px] text-teal-900 mb-1.5 font-medium">
+                      ¿Primera vez o aún no has creado tu contraseña?
+                    </p>
                     <button
                       type="button"
-                      disabled={resendCooldown > 0 || isLoadingVoter}
-                      onClick={() => handleRequestOtp()}
-                      className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
+                      onClick={() => handleResetVoterMode('activate')}
+                      className="w-full py-1.5 px-3 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <RefreshCw className={`w-3 h-3 ${isLoadingVoter ? 'animate-spin' : ''}`} />
-                      {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Crear o Activar Contraseña con Código a tu Correo</span>
                     </button>
                   </div>
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123456"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold focus:ring-2 focus:ring-teal-500"
-                    />
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleResetVoterMode('otp')}
+                      className="text-xs text-slate-500 hover:text-teal-700 hover:underline font-medium"
+                    >
+                      O ingresar con un código temporal de un solo uso (sin contraseña)
+                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5">
-                    Revise su bandeja de entrada o carpeta de correo no deseado (spam) en <strong>{maskedEmail}</strong> e introduzca el código de seguridad recibido.
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetVoter}
-                    className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold text-xs"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Atrás</span>
-                  </button>
-
-                  <Button
-                    type="submit"
-                    size="md"
-                    className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
-                    isLoading={isLoadingVoter}
-                  >
-                    Validar e Ingresar a Votar
-                  </Button>
                 </div>
               </form>
+            )}
+
+            {/* --- VOTER MODE 2: ACCOUNT ACTIVATION & PASSWORD REGISTRATION --- */}
+            {voterMode === 'activate' && (
+              <div className="space-y-3.5 pt-2 text-xs">
+                {activateStep === 'request' ? (
+                  <form onSubmit={handleRequestActivation} className="space-y-3.5">
+                    <div className="p-3 bg-teal-50/70 rounded-xl border border-teal-200 text-teal-900">
+                      <p className="text-[11px] leading-relaxed">
+                        Ingresa tu cédula registrada. Te enviaremos un código de verificación de 6 dígitos a tu correo electrónico para que puedas crear tu contraseña personal.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase mb-1">
+                        Número de Cédula / Documento
+                      </label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={voterCedula}
+                          onChange={(e) => setVoterCedula(e.target.value)}
+                          placeholder="ej: 12345678"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleResetVoterMode('password')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+                        isLoading={isLoadingVoter}
+                      >
+                        Enviar Código a mi Correo
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleRegisterPassword} className="space-y-3.5">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-slate-900 text-xs">{voterName}</span>
+                        {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700 uppercase">
+                          Código de 6 Dígitos
+                        </label>
+                        <button
+                          type="button"
+                          disabled={resendCooldown > 0 || isLoadingVoter}
+                          onClick={() => handleRequestActivation()}
+                          className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isLoadingVoter ? 'animate-spin' : ''}`} />
+                          {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={activationCode}
+                          onChange={(e) => setActivationCode(e.target.value.replace(/\D/g, ''))}
+                          placeholder="123456"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block font-bold text-slate-700 uppercase mb-1">
+                          Crear Contraseña
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showNewPassword ? 'text' : 'password'}
+                            required
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-xs focus:ring-2 focus:ring-teal-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                          >
+                            {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 uppercase mb-1">
+                          Confirmar Contraseña
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            required
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-300 text-slate-900 bg-white text-xs focus:ring-2 focus:ring-teal-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                          >
+                            {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {newPassword && <PasswordStrengthIndicator password={newPassword} />}
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setActivateStep('request')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+                        isLoading={isLoadingVoter}
+                      >
+                        Registrar Contraseña e Ingresar
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleResetVoterMode('password')}
+                    className="text-xs text-slate-500 hover:text-teal-700 font-medium hover:underline"
+                  >
+                    Ya tengo contraseña, volver al ingreso normal
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* --- VOTER MODE 3: TEMPORARY OTP CODE --- */}
+            {voterMode === 'otp' && (
+              <div className="space-y-3.5 pt-2 text-xs">
+                {otpStep === 'request' ? (
+                  <form onSubmit={handleRequestOtp} className="space-y-3.5">
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase mb-1">
+                        Número de Cédula / Documento de Identidad
+                      </label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={voterCedula}
+                          onChange={(e) => setVoterCedula(e.target.value)}
+                          placeholder="ej: 12345678"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleResetVoterMode('password')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+                        isLoading={isLoadingVoter}
+                      >
+                        Solicitar Código Temporal
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOtp} className="space-y-3.5">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-slate-900">{voterName}</span>
+                        {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700 uppercase">
+                          Código de 6 Dígitos
+                        </label>
+                        <button
+                          type="button"
+                          disabled={resendCooldown > 0 || isLoadingVoter}
+                          onClick={() => handleRequestOtp()}
+                          className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isLoadingVoter ? 'animate-spin' : ''}`} />
+                          {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                          placeholder="123456"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOtpStep('request')}
+                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold text-xs"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Atrás</span>
+                      </button>
+
+                      <Button
+                        type="submit"
+                        size="md"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
+                        isLoading={isLoadingVoter}
+                      >
+                        Validar e Ingresar
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleResetVoterMode('password')}
+                    className="text-xs text-slate-500 hover:text-teal-700 font-medium hover:underline"
+                  >
+                    Volver al ingreso con contraseña
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </Card>
@@ -345,7 +761,7 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                   <label className="block font-bold text-slate-700 uppercase">Contraseña</label>
                   <button
                     type="button"
-                    onClick={onOpenForgotPassword}
+                    onClick={() => onOpenForgotPassword(adminEmail)}
                     className="font-semibold text-teal-600 hover:underline"
                   >
                     ¿Olvidó contraseña?
@@ -367,7 +783,6 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                     onClick={() => setShowAdminPassword(!showAdminPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 transition-colors"
                     aria-label={showAdminPassword ? "Ocultar contraseña" : "Ver contraseña"}
-                    title={showAdminPassword ? "Ocultar contraseña" : "Ver contraseña"}
                   >
                     {showAdminPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -378,17 +793,10 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 flex items-start gap-2">
-                <Shield className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                <span>
-                  Los roles de Presidente, Contador y Secretaria son creados por el Administrador desde el panel de control.
-                </span>
-              </div>
-
               <Button
                 type="submit"
                 size="md"
-                className="w-full bg-slate-900 hover:bg-black text-white font-bold py-2.5 text-sm"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 text-sm"
                 isLoading={isLoadingAdmin}
                 rightIcon={<ChevronRight className="w-4 h-4" />}
               >
@@ -396,30 +804,13 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
               </Button>
             </form>
           </div>
+
+          <div className="pt-6 border-t border-slate-100 mt-6 text-center">
+            <p className="text-[11px] text-slate-400">
+              Conforme a Ley 675 de 2001 de Propiedad Horizontal en Colombia.
+            </p>
+          </div>
         </Card>
-      </div>
-
-      {/* Footer Registration Bar (Exclusive for Owners) */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-        <div className="flex items-center gap-3 text-slate-700">
-          <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center flex-shrink-0">
-            <UserPlus className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="font-bold text-slate-900 text-sm">¿Es un nuevo copropietario o residente?</p>
-            <p className="text-slate-500">Regístrese con sus datos del inmueble para acceder a las votaciones de su copropiedad.</p>
-          </div>
-        </div>
-
-        <Button
-          variant="primary"
-          size="md"
-          onClick={onOpenRegister}
-          className="bg-teal-600 hover:bg-teal-700 font-bold w-full sm:w-auto"
-          leftIcon={<UserPlus className="w-4 h-4" />}
-        >
-          Registrar Copropietario
-        </Button>
       </div>
     </div>
   );
