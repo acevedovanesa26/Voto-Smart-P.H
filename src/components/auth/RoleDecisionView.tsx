@@ -44,8 +44,8 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
-  // Voter Mode: 'password' (default) | 'activate' (first-time password setup) | 'otp' (temporary code)
-  const [voterMode, setVoterMode] = useState<'password' | 'activate' | 'otp'>('password');
+  // Voter Mode: 'password' (default) | 'activate' (first-time password setup with email verification)
+  const [voterMode, setVoterMode] = useState<'password' | 'activate'>('password');
 
   // Voter password login state
   const [voterCedula, setVoterCedula] = useState('');
@@ -59,10 +59,6 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Voter OTP state (Acceso temporal sin contraseña)
-  const [otpStep, setOtpStep] = useState<'request' | 'verify'>('request');
-  const [otpCode, setOtpCode] = useState('');
 
   // Shared voter metadata
   const [maskedEmail, setMaskedEmail] = useState('');
@@ -210,59 +206,10 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
     }
   };
 
-  // 5. Voter Temporary OTP Request
-  const handleRequestOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const doc = voterCedula.trim();
-    if (!doc) {
-      setErrorVoter('Por favor ingrese su número de cédula o documento de identidad.');
-      return;
-    }
-    setIsLoadingVoter(true);
-    setErrorVoter(null);
-    setSuccessVoter(null);
-    try {
-      const res = await api.requestVoterOtp(doc);
-      setMaskedEmail(res.maskedEmail);
-      setVoterName(res.name);
-      setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
-      setOtpCode('');
-      setOtpStep('verify');
-      setSuccessVoter(`Hemos enviado un código temporal de 6 dígitos a ${res.maskedEmail}. Revise su correo.`);
-      startCooldown(30);
-    } catch (err: any) {
-      setErrorVoter(err.message || 'No se encontró la cédula en el censo del conjunto.');
-    } finally {
-      setIsLoadingVoter(false);
-    }
-  };
-
-  // 6. Voter Temporary OTP Verify
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const codeToVerify = otpCode.trim();
-    if (!codeToVerify || codeToVerify.length < 4) {
-      setErrorVoter('Por favor ingrese el código de 6 dígitos que recibió en su correo.');
-      return;
-    }
-    setIsLoadingVoter(true);
-    setErrorVoter(null);
-    try {
-      await loginVoterWithOtp(voterCedula.trim(), codeToVerify);
-      onEnterVoter();
-    } catch (err: any) {
-      setErrorVoter(err.message || 'Código de verificación incorrecto o expirado.');
-    } finally {
-      setIsLoadingVoter(false);
-    }
-  };
-
-  const handleResetVoterMode = (mode: 'password' | 'activate' | 'otp') => {
+  const handleResetVoterMode = (mode: 'password' | 'activate') => {
     setVoterMode(mode);
     setActivateStep('request');
-    setOtpStep('request');
     setActivationCode('');
-    setOtpCode('');
     setNewPassword('');
     setConfirmPassword('');
     setErrorVoter(null);
@@ -397,8 +344,8 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                   Ingresar a Sala de Votación
                 </Button>
 
-                {/* Switcher to Activation or OTP */}
-                <div className="pt-2 border-t border-slate-100 space-y-2">
+                {/* Switcher to Activation */}
+                <div className="pt-2 border-t border-slate-100">
                   <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-200 text-center">
                     <p className="text-[11px] text-teal-900 mb-1.5 font-medium">
                       ¿Primera vez o aún no has creado tu contraseña?
@@ -410,16 +357,6 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>Crear o Activar Contraseña con Código a tu Correo</span>
-                    </button>
-                  </div>
-
-                  <div className="text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleResetVoterMode('otp')}
-                      className="text-xs text-slate-500 hover:text-teal-700 hover:underline font-medium"
-                    >
-                      O ingresar con un código temporal de un solo uso (sin contraseña)
                     </button>
                   </div>
                 </div>
@@ -594,123 +531,6 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
                     className="text-xs text-slate-500 hover:text-teal-700 font-medium hover:underline"
                   >
                     Ya tengo contraseña, volver al ingreso normal
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* --- VOTER MODE 3: TEMPORARY OTP CODE --- */}
-            {voterMode === 'otp' && (
-              <div className="space-y-3.5 pt-2 text-xs">
-                {otpStep === 'request' ? (
-                  <form onSubmit={handleRequestOtp} className="space-y-3.5">
-                    <div>
-                      <label className="block font-bold text-slate-700 uppercase mb-1">
-                        Número de Cédula / Documento de Identidad
-                      </label>
-                      <div className="relative">
-                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          required
-                          value={voterCedula}
-                          onChange={(e) => setVoterCedula(e.target.value)}
-                          placeholder="ej: 12345678"
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:ring-2 focus:ring-teal-500 text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleResetVoterMode('password')}
-                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Atrás</span>
-                      </button>
-
-                      <Button
-                        type="submit"
-                        size="md"
-                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
-                        isLoading={isLoadingVoter}
-                      >
-                        Solicitar Código Temporal
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleVerifyOtp} className="space-y-3.5">
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-slate-900">{voterName}</span>
-                        {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
-                      </div>
-                      <p className="text-[11px] text-slate-600">
-                        Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
-                      </p>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block font-bold text-slate-700 uppercase">
-                          Código de 6 Dígitos
-                        </label>
-                        <button
-                          type="button"
-                          disabled={resendCooldown > 0 || isLoadingVoter}
-                          onClick={() => handleRequestOtp()}
-                          className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${isLoadingVoter ? 'animate-spin' : ''}`} />
-                          {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
-                        </button>
-                      </div>
-                      <div className="relative">
-                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          required
-                          maxLength={6}
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                          placeholder="123456"
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold focus:ring-2 focus:ring-teal-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOtpStep('request')}
-                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold text-xs"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Atrás</span>
-                      </button>
-
-                      <Button
-                        type="submit"
-                        size="md"
-                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
-                        isLoading={isLoadingVoter}
-                      >
-                        Validar e Ingresar
-                      </Button>
-                    </div>
-                  </form>
-                )}
-
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleResetVoterMode('password')}
-                    className="text-xs text-slate-500 hover:text-teal-700 font-medium hover:underline"
-                  >
-                    Volver al ingreso con contraseña
                   </button>
                 </div>
               </div>

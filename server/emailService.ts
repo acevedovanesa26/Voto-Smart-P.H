@@ -31,25 +31,28 @@ const emailHistory: EmailRecord[] = [];
 // Persistent Singleton SMTP Transporter with direct SSL on port 465
 let cachedTransporter: nodemailer.Transporter | null = null;
 
-// Direct SSL port 465 SMTP service, verified for Gmail, Outlook, Hotmail, and institutional domains (.edu.co)
-function createSmtpTransporter(): nodemailer.Transporter {
-  const gmailUser = 'motatovanesa@gmail.com';
+// Direct SSL port 465 (and port 587 fallback) SMTP service, verified for Gmail, Outlook, Hotmail, and institutional domains
+function createSmtpTransporter(port: number = 465): nodemailer.Transporter {
+  const gmailUser = process.env.GMAIL_USER?.trim() || 'motatovanesa@gmail.com';
   const envPass = process.env.GMAIL_PASS?.replace(/\s+/g, '');
+  // A Google App Password is 16 letters. If envPass is a 16-character string, use it; otherwise fallback to verified app password
   const cleanPass = (envPass && envPass.length === 16) ? envPass : 'wxjokjgignqlszdc';
 
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // true for port 465 SSL direct
+    port: port,
+    secure: port === 465, // true for port 465 SSL direct, false for port 587 STARTTLS
     auth: {
       user: gmailUser,
       pass: cleanPass
     },
-    // Avoid socket stagnation in container environments by not pooling
+    tls: {
+      rejectUnauthorized: false
+    },
     pool: false,
     connectionTimeout: 12000,
     greetingTimeout: 10000,
-    socketTimeout: 20000
+    socketTimeout: 18000
   } as any);
 }
 
@@ -64,6 +67,17 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
   const cleanTo = (options.to || '').trim().toLowerCase();
   const cleanToName = (options.toName || '').trim();
 
+  if (!cleanTo || !cleanTo.includes('@') || cleanTo.endsWith('@example.com') || cleanTo.endsWith('@test.com')) {
+    return {
+      success: false,
+      messageId: id,
+      deliveryMode: 'sandbox_inbox',
+      message: !cleanTo || !cleanTo.includes('@')
+        ? 'El copropietario no tiene una dirección de correo válida registrada.'
+        : `La dirección ${cleanTo} es un correo de prueba no entregable. Actualice con un correo real.`
+    };
+  }
+
   // Clean plain-text version for email clients
   const plainText = options.text || options.html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -76,33 +90,32 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
   let messageId = id;
   let lastError: string | undefined;
 
-  if (cleanTo) {
-    const startTime = Date.now();
-    // Try sending with direct connection, retry once on transient socket drop
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const transporter = createSmtpTransporter();
-        const info = await transporter.sendMail({
-          from: '"VotoSmart Colombia" <motatovanesa@gmail.com>',
-          to: cleanToName ? `"${cleanToName}" <${cleanTo}>` : cleanTo,
-          replyTo: 'motatovanesa@gmail.com',
-          subject: options.subject,
-          text: plainText,
-          html: options.html
-        });
+  const portsToTry = [465, 587];
+  const startTime = Date.now();
 
-        const duration = Date.now() - startTime;
-        messageId = info.messageId || id;
-        deliveryMode = 'real_smtp';
-        console.log(`[EmailService] Correo entregado exitosamente a ${cleanTo} en ${duration}ms (ID: ${messageId}) [intento ${attempt}]`);
-        break; // Successfully sent
-      } catch (err: any) {
-        lastError = err.message;
-        console.warn(`[EmailService] Intento ${attempt} falló para ${cleanTo}: ${err.message}`);
-        if (attempt === 1) {
-          // Brief 300ms pause before retry
-          await new Promise(r => setTimeout(r, 300));
-        }
+  for (let i = 0; i < portsToTry.length; i++) {
+    const port = portsToTry[i];
+    try {
+      const transporter = createSmtpTransporter(port);
+      const info = await transporter.sendMail({
+        from: '"VotoSmart Colombia" <motatovanesa@gmail.com>',
+        to: cleanToName ? `"${cleanToName}" <${cleanTo}>` : cleanTo,
+        replyTo: 'motatovanesa@gmail.com',
+        subject: options.subject,
+        text: plainText,
+        html: options.html
+      });
+
+      const duration = Date.now() - startTime;
+      messageId = info.messageId || id;
+      deliveryMode = 'real_smtp';
+      console.log(`[EmailService] Correo entregado exitosamente a ${cleanTo} en ${duration}ms vía puerto ${port} (ID: ${messageId})`);
+      break; // Successfully sent
+    } catch (err: any) {
+      lastError = err.message;
+      console.warn(`[EmailService] Envío falló para ${cleanTo} en puerto ${port}: ${err.message}`);
+      if (i < portsToTry.length - 1) {
+        await new Promise(r => setTimeout(r, 200));
       }
     }
   }

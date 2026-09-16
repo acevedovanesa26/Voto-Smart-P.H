@@ -46,8 +46,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
-  // Voter sub-mode: 'password' | 'activate' | 'otp'
-  const [voterSubMode, setVoterSubMode] = useState<'password' | 'activate' | 'otp'>('password');
+  // Voter sub-mode: 'password' | 'activate'
+  const [voterSubMode, setVoterSubMode] = useState<'password' | 'activate'>('password');
 
   // Voter credentials
   const [voterCedula, setVoterCedula] = useState('');
@@ -61,10 +61,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Voter OTP (Temporal)
-  const [otpStep, setOtpStep] = useState<'request' | 'verify'>('request');
-  const [otpCode, setOtpCode] = useState('');
 
   // Shared voter metadata
   const [maskedEmail, setMaskedEmail] = useState('');
@@ -196,54 +192,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       if (onSuccessLogin) onSuccessLogin('owner');
     } catch (err: any) {
       setError(err.message || 'Código incorrecto o expirado.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Voter Temporary OTP Request
-  const handleRequestOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const doc = voterCedula.trim();
-    if (!doc) {
-      setError('Por favor ingrese su número de cédula.');
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      const res = await api.requestVoterOtp(doc);
-      setMaskedEmail(res.maskedEmail);
-      setVoterName(res.name);
-      setVoterApto(res.apartment ? `${res.building ? res.building + ' - ' : ''}${res.apartment}` : '');
-      setOtpCode('');
-      setOtpStep('verify');
-      setSuccessMessage(`Código enviado al correo ${res.maskedEmail}.`);
-      startCooldown(30);
-    } catch (err: any) {
-      setError(err.message || 'No se encontró la cédula en el censo.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Voter Temporary OTP Verify
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const codeToVerify = otpCode.trim();
-    if (!codeToVerify || codeToVerify.length < 4) {
-      setError('Por favor ingrese el código de 6 dígitos que recibió en su correo.');
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      await loginVoterWithOtp(voterCedula.trim(), codeToVerify);
-      onClose();
-      if (onSuccessLogin) onSuccessLogin('owner');
-    } catch (err: any) {
-      setError(err.message || 'Código de verificación incorrecto.');
     } finally {
       setIsLoading(false);
     }
@@ -396,21 +344,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       <span>Crear o Activar Contraseña con Código a tu Correo</span>
                     </button>
                   </div>
-
-                  <div className="text-center">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVoterSubMode('otp');
-                        setOtpStep('request');
-                        setError(null);
-                        setSuccessMessage(null);
-                      }}
-                      className="text-xs text-slate-500 hover:text-teal-700 font-medium hover:underline"
-                    >
-                      O ingresar con código temporal sin contraseña
-                    </button>
-                  </div>
                 </div>
               </form>
             )}
@@ -561,113 +494,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         isLoading={isLoading}
                       >
                         Registrar e Ingresar
-                      </Button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            )}
-
-            {/* VOTER MODE 3: TEMPORARY OTP */}
-            {voterSubMode === 'otp' && (
-              <div className="space-y-3.5">
-                {otpStep === 'request' ? (
-                  <form onSubmit={handleRequestOtp} className="space-y-3.5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                        Cédula de Copropietario
-                      </label>
-                      <div className="relative">
-                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          required
-                          value={voterCedula}
-                          onChange={(e) => setVoterCedula(e.target.value)}
-                          placeholder="ej: 12345678"
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-medium text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setVoterSubMode('password')}
-                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                        <span>Atrás</span>
-                      </button>
-
-                      <Button
-                        type="submit"
-                        size="md"
-                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold py-2.5 text-sm"
-                        isLoading={isLoading}
-                      >
-                        Solicitar Código
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleVerifyOtp} className="space-y-3.5">
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-slate-800 text-xs">{voterName}</span>
-                        {voterApto && <Badge variant="teal" size="sm">{voterApto}</Badge>}
-                      </div>
-                      <p className="text-[11px] text-slate-600">
-                        Código enviado a: <strong className="text-teal-700">{maskedEmail}</strong>
-                      </p>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-xs font-bold text-slate-700 uppercase">
-                          Código de 6 Dígitos
-                        </label>
-                        <button
-                          type="button"
-                          disabled={resendCooldown > 0 || isLoading}
-                          onClick={() => handleRequestOtp()}
-                          className="text-xs font-semibold text-teal-600 hover:text-teal-800 disabled:text-slate-400 disabled:no-underline hover:underline flex items-center gap-1"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-                          {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
-                        </button>
-                      </div>
-                      <div className="relative">
-                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          required
-                          maxLength={6}
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                          placeholder="123456"
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-teal-500 text-slate-900 bg-white font-mono text-center text-lg tracking-widest font-bold"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOtpStep('request')}
-                        className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 flex items-center gap-1 font-semibold"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                        <span>Atrás</span>
-                      </button>
-
-                      <Button
-                        type="submit"
-                        size="md"
-                        className="flex-1 bg-teal-600 hover:bg-teal-700 font-bold text-sm"
-                        isLoading={isLoading}
-                      >
-                        Ingresar a Votar
                       </Button>
                     </div>
                   </form>

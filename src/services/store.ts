@@ -35,6 +35,7 @@ import {
 
 interface PasswordResetRequest {
   email: string;
+  documentNumber?: string;
   code: string;
   createdAt: number;
   expiresAt: number;
@@ -125,6 +126,7 @@ class DataStore {
     if (!found) throw new Error('Conjunto residencial no encontrado');
     this.complex = { ...found };
     this.addAuditLog('user-admin', 'Administrador', 'admin', 'CAMBIO_CONJUNTO', `Cambio de conjunto activo a: ${found.name}`);
+    this.notifyChange();
     return this.complex;
   }
 
@@ -137,6 +139,7 @@ class DataStore {
     this.complexes.push(newComplex);
     this.complex = { ...newComplex };
     this.addAuditLog('user-admin', 'Administrador', 'admin', 'CREACION_CONJUNTO', `Creación de nuevo conjunto residencial: ${newComplex.name}`);
+    this.notifyChange();
     return newComplex;
   }
 
@@ -147,6 +150,7 @@ class DataStore {
       this.complexes[idx] = { ...this.complex };
     }
     this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'ACTUALIZAR_CONJUNTO', `Actualización de datos del conjunto ${this.complex.name}`);
+    this.notifyChange();
     return this.complex;
   }
 
@@ -287,54 +291,88 @@ class DataStore {
       owner = this.owners.find(o => o.email.toLowerCase() === cleanDoc.toLowerCase());
     }
 
+    // Try by apartment if entered
     if (!user && !owner) {
-      throw new Error(`No se encontró ningún copropietario registrado con la cédula "${cleanDoc}" en ${this.complex.name}. Por favor verifique el número o regístrese en el censo.`);
+      const aptClean = cleanDoc.toLowerCase().replace(/^(apto|apartamento)\s*/i, '');
+      owner = this.owners.find(o => {
+        const oApt = o.apartment.toLowerCase().replace(/^(apto|apartamento)\s*/i, '');
+        return oApt === aptClean || o.apartment.toLowerCase() === cleanDoc.toLowerCase() || `${o.building} ${o.apartment}`.toLowerCase() === cleanDoc.toLowerCase();
+      });
+      if (owner) {
+        user = this.getUserByDocument(owner.documentNumber) || this.getUserByEmail(owner.email);
+      }
     }
 
-    const email = user?.email || owner?.email || '';
+    if (!user && !owner) {
+      throw new Error(`No se encontró ningún copropietario registrado con la cédula "${cleanDoc}" en ${this.complex.name}. Por favor verifique el número o comuníquese con la administración.`);
+    }
+
+    // The census owner is the primary authoritative source of truth for email and identity!
+    const email = (owner?.email || user?.email || '').trim().toLowerCase();
+    if (owner && user && owner.email && user.email.toLowerCase() !== owner.email.toLowerCase()) {
+      user.email = owner.email;
+    }
+
+    const name = owner?.name || user?.name || 'Copropietario';
+    const docNumber = owner?.documentNumber || user?.documentNumber || cleanDoc;
+    const apartment = owner?.apartment || user?.apartment || '';
+    const building = owner?.building || user?.building || '';
+    const coefficient = owner?.coefficient || user?.coefficient || 0;
+
     const hasPassword = this.userPasswords.has(email.toLowerCase());
     const [userPart, domainPart] = email.split('@');
-    const maskedUser = userPart.length > 2 
+    const maskedUser = (userPart && userPart.length > 2)
       ? `${userPart[0]}***${userPart[userPart.length - 1]}` 
-      : `${userPart[0]}***`;
+      : `${userPart ? userPart[0] : 'u'}***`;
     const maskedEmail = `${maskedUser}@${domainPart || 'correo.com'}`;
 
     return {
       exists: true,
       hasPassword,
-      name: user?.name || owner?.name || 'Copropietario',
+      name,
       email,
       maskedEmail,
-      documentNumber: user?.documentNumber || owner?.documentNumber || cleanDoc,
-      apartment: user?.apartment || owner?.apartment || '',
-      building: user?.building || owner?.building || '',
-      coefficient: user?.coefficient || owner?.coefficient || 0
+      documentNumber: docNumber,
+      apartment,
+      building,
+      coefficient
     };
   }
 
   // Voter Activation: Request 6-digit code to email for registering password
   requestVoterActivation(documentNumber: string) {
     const status = this.checkVoterStatus(documentNumber);
-    const email = status.email;
+    const email = status.email.toLowerCase();
+    const docDigits = (status.documentNumber || '').replace(/\D/g, '');
 
-    // Light debounce: only prevent immediate 1-second double clicks
+    // Anti-jitter: prevent instant microsecond double-clicks (< 250ms)
     const latestReq = this.resetRequests
-      .filter((r) => r.email.toLowerCase() === email.toLowerCase())
+      .filter((r) => r.email.toLowerCase() === email || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits))
       .sort((a, b) => b.createdAt - a.createdAt)[0];
-    if (latestReq && (Date.now() - latestReq.createdAt) < 1500) {
+    if (latestReq && (Date.now() - latestReq.createdAt) < 250) {
       throw new Error('Por favor espera un momento antes de solicitar un nuevo código.');
     }
+
+    // Invalidate prior unused codes for this voter so the new code is uniquely active
+    this.resetRequests.forEach((r) => {
+      if (r.email.toLowerCase() === email || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) {
+        r.used = true;
+      }
+    });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const createdAt = Date.now();
     this.resetRequests.push({
-      email: email.toLowerCase(),
+      email,
+      documentNumber: status.documentNumber,
       code,
       createdAt,
       expiresAt: createdAt + 15 * 60 * 1000, // 15 minutes validity
       used: false,
       verified: false
     });
+
+    this.notifyChange();
 
     return {
       success: true,
@@ -364,50 +402,66 @@ class DataStore {
     assertPasswordPolicy(password.trim());
 
     const status = this.checkVoterStatus(cleanDoc);
-    const email = status.email;
+    const email = status.email.toLowerCase();
+    const docDigits = (status.documentNumber || cleanDoc).replace(/\D/g, '');
 
-    // Match ANY active unexpired code requested by this user within 15 minutes
+    // Match ANY active unexpired code requested for this user (by email OR by document number) within 15 minutes
     const req = this.resetRequests.find(
-      (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && !r.used && Date.now() <= r.expiresAt
+      (r) => 
+        (r.email.toLowerCase() === email || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) &&
+        r.code.trim() === cleanCode &&
+        !r.used &&
+        Date.now() <= r.expiresAt
     );
 
     if (!req) {
       // Check if expired
       const expiredReq = this.resetRequests.find(
-        (r) => r.email.toLowerCase() === email.toLowerCase() && r.code.trim() === cleanCode && Date.now() > r.expiresAt
+        (r) => 
+          (r.email.toLowerCase() === email || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) &&
+          r.code.trim() === cleanCode &&
+          Date.now() > r.expiresAt
       );
       if (expiredReq) {
-        throw new Error('El código de verificación ha expirado. Por favor solicite uno nuevo.');
+        throw new Error('El código de verificación ha expirado. Por favor solicite uno nuevo con el botón "Reenviar código".');
       }
       throw new Error('El código ingresado es incorrecto o ya ha sido utilizado.');
     }
 
     // Invalidate this code and all pending codes for this user
     this.resetRequests.forEach((r) => {
-      if (r.email.toLowerCase() === email.toLowerCase()) {
+      if (r.email.toLowerCase() === email || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) {
         r.used = true;
       }
     });
     req.verified = true;
 
-    // Set user password
+    // Set user password permanently
     this.userPasswords.set(email.toLowerCase(), password.trim());
 
-    // Ensure user object exists in this.users
+    // Ensure user object exists in this.users and is synchronized with census
     let user = this.getUserByEmail(email) || this.getUserByDocument(cleanDoc);
     let owner = this.getOwnerByDocument(cleanDoc);
-    if (!user && owner) {
+
+    if (user) {
+      user.name = status.name;
+      user.email = email;
+      user.documentNumber = status.documentNumber;
+      user.apartment = status.apartment;
+      user.building = status.building;
+      user.coefficient = status.coefficient;
+    } else {
       user = {
-        id: `user-${owner.id}`,
-        name: owner.name,
-        email: owner.email,
+        id: owner ? `user-${owner.id}` : `user-${Date.now()}`,
+        name: status.name,
+        email: email,
         role: 'owner',
-        phone: owner.phone,
-        documentType: owner.documentType,
-        documentNumber: owner.documentNumber,
-        apartment: owner.apartment,
-        building: owner.building,
-        coefficient: owner.coefficient,
+        phone: owner?.phone || '+57 300 000 0000',
+        documentType: owner?.documentType || 'CC',
+        documentNumber: status.documentNumber,
+        apartment: status.apartment,
+        building: status.building,
+        coefficient: status.coefficient,
         status: 'active',
         complexId: this.complex.id,
         createdAt: new Date().toISOString()
@@ -426,13 +480,13 @@ class DataStore {
       }
     }
 
-    this.addAuditLog(user!.id, user!.name, 'owner', 'ACTIVACION_CONTRASENA_VOTANTE', `Activación de cuenta y registro de contraseña para copropietario ${user!.name}`);
+    this.addAuditLog(user.id, user.name, 'owner', 'ACTIVACION_CONTRASENA_VOTANTE', `Activación de cuenta y registro de contraseña para copropietario ${user.name}`);
     this.notifyChange();
 
     return {
-      user: user!,
+      user: user,
       complex: this.complex,
-      token: `voter_token_${user!.id}_${Date.now()}`
+      token: `voter_token_${user.id}_${Date.now()}`
     };
   }
 
@@ -916,6 +970,7 @@ class DataStore {
       'CAMBIO_CONTRASENA_PERFIL',
       `Cambio exitoso de contraseña para ${user.name} (${user.email})`
     );
+    this.notifyChange();
 
     return { success: true, message: 'Contraseña actualizada exitosamente.' };
   }
@@ -934,8 +989,11 @@ class DataStore {
       throw new Error('No existe ninguna cuenta registrada con los datos ingresados.');
     }
 
-    const cleanEmail = (user?.email || owner?.email || '').toLowerCase();
-    const recipientName = user?.name || owner?.name || 'Usuario';
+    // Authoritative email: census owner takes precedence
+    const cleanEmail = (owner?.email || user?.email || '').toLowerCase();
+    const recipientName = owner?.name || user?.name || 'Usuario';
+    const docNumber = owner?.documentNumber || user?.documentNumber || clean;
+    const docDigits = docNumber.replace(/\D/g, '');
 
     // If owner exists but user account not materialized yet, create it
     if (!user && owner) {
@@ -957,13 +1015,20 @@ class DataStore {
       this.users.push(user);
     }
 
-    // Light debounce: only prevent immediate 1-second double clicks
+    // Light anti-jitter debounce (250ms)
     const latestReq = this.resetRequests
-      .filter((r) => r.email === cleanEmail)
+      .filter((r) => r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits))
       .sort((a, b) => b.createdAt - a.createdAt)[0];
-    if (latestReq && (Date.now() - latestReq.createdAt) < 1500) {
+    if (latestReq && (Date.now() - latestReq.createdAt) < 250) {
       throw new Error('Por favor espera un momento antes de solicitar un nuevo código.');
     }
+
+    // Invalidate prior unused reset codes for this account
+    this.resetRequests.forEach((r) => {
+      if (r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) {
+        r.used = true;
+      }
+    });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
     const createdAt = Date.now();
@@ -971,6 +1036,7 @@ class DataStore {
 
     this.resetRequests.push({
       email: cleanEmail,
+      documentNumber: docNumber,
       code,
       createdAt,
       expiresAt,
@@ -978,11 +1044,13 @@ class DataStore {
       verified: false
     });
 
+    this.notifyChange();
+
     // Mask email for privacy
     const [userPart, domainPart] = cleanEmail.split('@');
-    const maskedUser = userPart.length > 2 
+    const maskedUser = (userPart && userPart.length > 2)
       ? `${userPart[0]}***${userPart[userPart.length - 1]}` 
-      : `${userPart[0]}***`;
+      : `${userPart ? userPart[0] : 'u'}***`;
     const maskedEmail = `${maskedUser}@${domainPart || 'correo.com'}`;
 
     return {
@@ -1010,16 +1078,24 @@ class DataStore {
 
     let user = this.getUserByEmail(clean) || this.getUserByDocument(clean);
     let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
-    const cleanEmail = (user?.email || owner?.email || clean).toLowerCase();
+    const cleanEmail = (owner?.email || user?.email || clean).toLowerCase();
+    const docDigits = (owner?.documentNumber || user?.documentNumber || clean).replace(/\D/g, '');
 
     // Match any unexpired, unused code generated for this user
     const req = this.resetRequests.find(
-      (r) => r.email === cleanEmail && !r.used && r.code === cleanCode && Date.now() <= r.expiresAt
+      (r) => 
+        (r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) &&
+        !r.used &&
+        r.code === cleanCode &&
+        Date.now() <= r.expiresAt
     );
 
     if (!req) {
       const expiredReq = this.resetRequests.find(
-        (r) => r.email === cleanEmail && r.code === cleanCode && Date.now() > r.expiresAt
+        (r) => 
+          (r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) &&
+          r.code === cleanCode &&
+          Date.now() > r.expiresAt
       );
       if (expiredReq) {
         throw new Error('El código ha vencido. Por favor solicite uno nuevo.');
@@ -1037,16 +1113,24 @@ class DataStore {
 
     let user = this.getUserByEmail(clean) || this.getUserByDocument(clean);
     let owner = this.owners.find((o) => o.email.toLowerCase() === clean) || this.getOwnerByDocument(clean);
-    const cleanEmail = (user?.email || owner?.email || clean).toLowerCase();
+    const cleanEmail = (owner?.email || user?.email || clean).toLowerCase();
+    const docDigits = (owner?.documentNumber || user?.documentNumber || clean).replace(/\D/g, '');
 
     // Match any unexpired, unused code generated for this user
     const req = this.resetRequests.find(
-      (r) => r.email === cleanEmail && !r.used && r.code === cleanCode && Date.now() <= r.expiresAt
+      (r) => 
+        (r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) &&
+        !r.used &&
+        r.code === cleanCode &&
+        Date.now() <= r.expiresAt
     );
 
     if (!req) {
       const expiredReq = this.resetRequests.find(
-        (r) => r.email === cleanEmail && r.code === cleanCode && Date.now() > r.expiresAt
+        (r) => 
+          (r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) &&
+          r.code === cleanCode &&
+          Date.now() > r.expiresAt
       );
       if (expiredReq) {
         throw new Error('El código ha vencido. Por favor solicite uno nuevo.');
@@ -1058,7 +1142,7 @@ class DataStore {
 
     // Invalidate code and pending requests for this email
     this.resetRequests.forEach((r) => {
-      if (r.email === cleanEmail) {
+      if (r.email === cleanEmail || (docDigits && r.documentNumber && r.documentNumber.replace(/\D/g, '') === docDigits)) {
         r.used = true;
       }
     });
@@ -1069,6 +1153,8 @@ class DataStore {
     if (user) {
       this.addAuditLog(user.id, user.name, user.role, 'CAMBIO_CONTRASEÑA', `Restablecimiento exitoso de contraseña para ${user.email}`);
     }
+
+    this.notifyChange();
 
     return {
       success: true,
@@ -1119,6 +1205,7 @@ class DataStore {
     this.users.push(newUser);
 
     this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'REGISTRO_PROPIETARIO', `Registro de propietario ${newOwner.name} (${newOwner.apartment}) en ${this.complex.name}`);
+    this.notifyChange();
     return newOwner;
   }
 
@@ -1129,11 +1216,27 @@ class DataStore {
     const updated = { ...prev, ...updateData };
     this.owners[idx] = updated;
 
+    const prevDigits = (prev.documentNumber || '').replace(/\D/g, '');
+    const prevEmail = (prev.email || '').trim().toLowerCase();
+    const newEmail = (updated.email || '').trim().toLowerCase();
+
     // Synchronize matching user in this.users
     const userIdx = this.users.findIndex(
-      (u) => u.id === `user-${id}` || u.documentNumber === prev.documentNumber || u.email.toLowerCase() === prev.email.toLowerCase()
+      (u) => 
+        u.id === `user-${id}` || 
+        u.id === id ||
+        u.email.toLowerCase() === prevEmail ||
+        (prevDigits && (u.documentNumber || '').replace(/\D/g, '') === prevDigits)
     );
+
     if (userIdx !== -1) {
+      const oldEmail = this.users[userIdx].email.toLowerCase();
+      if (oldEmail !== newEmail && this.userPasswords.has(oldEmail)) {
+        const pass = this.userPasswords.get(oldEmail)!;
+        this.userPasswords.delete(oldEmail);
+        this.userPasswords.set(newEmail, pass);
+      }
+
       this.users[userIdx] = {
         ...this.users[userIdx],
         name: updated.name,
@@ -1145,7 +1248,33 @@ class DataStore {
         building: updated.building,
         coefficient: updated.coefficient
       };
+    } else {
+      // Create user record if not materialized yet so the voter can log in immediately
+      const newUser: User = {
+        id: `user-${updated.id}`,
+        name: updated.name,
+        email: updated.email,
+        role: 'owner',
+        phone: updated.phone,
+        documentType: updated.documentType,
+        documentNumber: updated.documentNumber,
+        apartment: updated.apartment,
+        building: updated.building,
+        coefficient: updated.coefficient,
+        status: updated.status || 'active',
+        complexId: updated.complexId || this.complex.id,
+        createdAt: new Date().toISOString()
+      };
+      this.users.push(newUser);
     }
+
+    // Invalidate or update any pending reset requests for this owner so fresh codes can be requested immediately
+    this.resetRequests.forEach((r) => {
+      if (r.email.toLowerCase() === prevEmail || (prevDigits && (r.documentNumber || '').replace(/\D/g, '') === prevDigits)) {
+        r.email = newEmail;
+        r.documentNumber = updated.documentNumber;
+      }
+    });
 
     // Synchronize in quorum list
     this.quorum.forEach((q) => {
@@ -1162,9 +1291,10 @@ class DataStore {
       'Administración',
       'admin',
       'ACTUALIZACION_PROPIETARIO',
-      `Edición de datos del copropietario ${updated.name} (${updated.building} - ${updated.apartment})`
+      `Edición de datos del copropietario ${updated.name} (${updated.building} - ${updated.apartment}, correo: ${updated.email})`
     );
 
+    this.notifyChange();
     return updated;
   }
 
@@ -1184,6 +1314,7 @@ class DataStore {
       `${isCouncilMember ? 'Designación' : 'Retiro'} de ${owner.name} (${owner.building} - ${owner.apartment}) como miembro del Consejo de Administración`
     );
 
+    this.notifyChange();
     return owner;
   }
 
@@ -1200,6 +1331,7 @@ class DataStore {
       successCount++;
     }
     this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'IMPORTACION_MASIVA_EXCEL', `Importación exitosa de ${successCount} propietarios en ${this.complex.name}`);
+    this.notifyChange();
     return { successCount, total: this.getOwners(targetComplexId).length };
   }
 
@@ -1225,6 +1357,7 @@ class DataStore {
       `Eliminación del copropietario ${removed.name} (${removed.building} - ${removed.apartment})`
     );
 
+    this.notifyChange();
     return true;
   }
 
@@ -1256,6 +1389,7 @@ class DataStore {
       `Eliminación masiva de ${toDelete.length} copropietarios del censo`
     );
 
+    this.notifyChange();
     return { deletedCount: toDelete.length, total: this.getOwners(complexId).length };
   }
 
@@ -1301,6 +1435,7 @@ class DataStore {
     });
 
     this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'CREACIÓN_ASAMBLEA', `Creación de ${newAssembly.title} en ${this.complex.name}`);
+    this.notifyChange();
     return newAssembly;
   }
 
@@ -1319,6 +1454,7 @@ class DataStore {
 
     this.assemblies[idx] = { ...this.assemblies[idx], ...updateData };
     this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'ESTADO_ASAMBLEA', `Cambio de estado en asamblea a ${updateData.status || 'actualizado'}`);
+    this.notifyChange();
     return this.assemblies[idx];
   }
 
@@ -1354,6 +1490,7 @@ class DataStore {
       `${checkedIn ? 'Registro de ingreso' : 'Retiro'} de ${item.ownerName} (${item.apartment}). Quórum actual: ${totalRepresented.toFixed(2)}%`
     );
 
+    this.notifyChange();
     return { item, representedQuorum: totalRepresented, checkedInCount: count };
   }
 
@@ -1370,6 +1507,7 @@ class DataStore {
     };
     this.documents.push(newDoc);
     this.addAuditLog('user-admin', doc.uploadedBy, 'admin', 'CARGA_DOCUMENTO', `Carga de archivo ${newDoc.name}`);
+    this.notifyChange();
     return newDoc;
   }
 
@@ -1378,6 +1516,7 @@ class DataStore {
     if (doc) {
       this.documents = this.documents.filter((d) => d.id !== id);
       this.addAuditLog('user-admin', 'Carolina Méndez', 'admin', 'ELIMINAR_DOCUMENTO', `Eliminación de archivo ${doc.name}`);
+      this.notifyChange();
       return true;
     }
     return false;
@@ -1732,6 +1871,8 @@ class DataStore {
       `Voto registrado en "${vote.title}" (Comprobante: ${receiptCode})`
     );
 
+    this.notifyChange();
+
     return {
       success: true,
       receiptCode,
@@ -1848,11 +1989,13 @@ class DataStore {
       timestamp: new Date().toISOString()
     };
     this.notes.push(newNote);
+    this.notifyChange();
     return newNote;
   }
 
   deleteNote(id: string) {
     this.notes = this.notes.filter((n) => n.id !== id);
+    this.notifyChange();
     return true;
   }
 
@@ -1872,6 +2015,7 @@ class DataStore {
           generatedAt: new Date().toISOString()
         };
         this.addAuditLog('user-admin', minutesData.generatedBy, 'admin', 'ACTUALIZAR_ACTA', `Actualización de acta a versión ${this.minutes[idx].version}`);
+        this.notifyChange();
         return this.minutes[idx];
       }
     }
@@ -1884,6 +2028,7 @@ class DataStore {
     };
     this.minutes.unshift(newMinutes);
     this.addAuditLog('user-admin', minutesData.generatedBy, 'admin', 'GENERAR_ACTA', `Generación inicial del acta de asamblea`);
+    this.notifyChange();
     return newMinutes;
   }
 
@@ -2109,6 +2254,7 @@ class DataStore {
       minutes: this.minutes,
       auditLogs: this.auditLogs,
       emailLogs: this.emailLogs,
+      resetRequests: this.resetRequests,
       userPasswords: Array.from(this.userPasswords.entries())
     };
   }
@@ -2124,19 +2270,9 @@ class DataStore {
       }
       if (Array.isArray(snapshot.users) && snapshot.users.length > 0) {
         this.users = snapshot.users;
-        for (const demoUser of DEMO_USERS) {
-          if (!this.users.some(u => u.email.toLowerCase() === demoUser.email.toLowerCase())) {
-            this.users.push(demoUser);
-          }
-        }
       }
       if (Array.isArray(snapshot.owners) && snapshot.owners.length > 0) {
         this.owners = snapshot.owners;
-        for (const demoOwner of DEMO_OWNERS) {
-          if (!this.owners.some(o => o.email.toLowerCase() === demoOwner.email.toLowerCase() || o.documentNumber === demoOwner.documentNumber)) {
-            this.owners.push(demoOwner);
-          }
-        }
       }
       if (Array.isArray(snapshot.assemblies) && snapshot.assemblies.length > 0) {
         this.assemblies = snapshot.assemblies;
@@ -2167,6 +2303,9 @@ class DataStore {
       }
       if (Array.isArray(snapshot.emailLogs)) {
         this.emailLogs = snapshot.emailLogs;
+      }
+      if (Array.isArray(snapshot.resetRequests)) {
+        this.resetRequests = snapshot.resetRequests;
       }
       if (Array.isArray(snapshot.userPasswords)) {
         this.userPasswords = new Map(snapshot.userPasswords);

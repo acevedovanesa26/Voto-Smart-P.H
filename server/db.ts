@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { Pool } from 'pg';
 import { store } from '../src/services/store';
 
@@ -6,11 +8,47 @@ let isConnected = false;
 let dbError: string | null = null;
 let saveTimeout: NodeJS.Timeout | null = null;
 
+const DATA_DIR = path.join(process.cwd(), 'data');
+const STATE_FILE = path.join(DATA_DIR, 'votosmart_state.json');
+
+function saveToDisk(snapshot: any) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(STATE_FILE, JSON.stringify(snapshot, null, 2), 'utf-8');
+  } catch (err: any) {
+    console.warn('[Database] Advertencia al escribir backup local:', err.message);
+  }
+}
+
+function loadFromDisk(): any | null {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const raw = fs.readFileSync(STATE_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (err: any) {
+    console.warn('[Database] Advertencia al leer backup local:', err.message);
+  }
+  return null;
+}
+
 export async function initDb(): Promise<boolean> {
   let connectionString = process.env.DATABASE_URL;
 
+  // Always register store onChange listener to persist to disk and database
+  store.setOnChange(() => {
+    debouncedSave();
+  });
+
   if (!connectionString) {
-    console.log('[Database] No DATABASE_URL provided. Running with In-Memory / Local store.');
+    console.log('[Database] Sin DATABASE_URL. Inicializando almacenamiento en disco local.');
+    const diskState = loadFromDisk();
+    if (diskState) {
+      console.log('[Database] Restaurando estado guardado desde almacenamiento local.');
+      store.loadSnapshot(diskState);
+    }
     return false;
   }
 
@@ -29,7 +67,7 @@ export async function initDb(): Promise<boolean> {
   }
 
   try {
-    console.log('[Database] Connecting to PostgreSQL database...');
+    console.log('[Database] Conectando a la base de datos PostgreSQL...');
     pool = new Pool({
       connectionString,
       ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
@@ -38,11 +76,11 @@ export async function initDb(): Promise<boolean> {
 
     // Guard against unhandled background pool errors
     pool.on('error', (err) => {
-      console.warn('[Database] Background pool connection warning:', err.message);
+      console.warn('[Database] Advertencia en conexión background de pool:', err.message);
     });
 
     const client = await pool.connect();
-    console.log('[Database] PostgreSQL connected successfully!');
+    console.log('[Database] PostgreSQL conectado exitosamente.');
     isConnected = true;
     dbError = null;
 
@@ -60,17 +98,18 @@ export async function initDb(): Promise<boolean> {
     client.release();
 
     if (res.rows.length > 0 && res.rows[0].data) {
-      console.log('[Database] Loading saved state from PostgreSQL into store...');
+      console.log('[Database] Restaurando estado persistido desde PostgreSQL...');
       store.loadSnapshot(res.rows[0].data);
     } else {
-      console.log('[Database] No existing state in database. Seeding initial data to PostgreSQL...');
+      const diskState = loadFromDisk();
+      if (diskState) {
+        console.log('[Database] Restaurando estado desde archivo local a PostgreSQL...');
+        store.loadSnapshot(diskState);
+      } else {
+        console.log('[Database] Inicializando primer snapshot en PostgreSQL...');
+      }
       await saveStateNow();
     }
-
-    // Register store listener to persist changes automatically
-    store.setOnChange(() => {
-      debouncedSave();
-    });
 
     return true;
   } catch (err: any) {
@@ -81,7 +120,11 @@ export async function initDb(): Promise<boolean> {
       pool = null;
     }
     console.warn('[Database] Advertencia al conectar con PostgreSQL:', dbError);
-    console.log('[Database] Continuando de forma segura en modo In-Memory.');
+    console.log('[Database] Activando persistencia en disco local como respaldo de alta disponibilidad.');
+    const diskState = loadFromDisk();
+    if (diskState) {
+      store.loadSnapshot(diskState);
+    }
     return false;
   }
 }
@@ -93,7 +136,7 @@ export function isDbConnected(): boolean {
 export function getDbStatus() {
   return {
     connected: isConnected,
-    type: isConnected ? 'PostgreSQL' : 'In-Memory',
+    type: isConnected ? 'PostgreSQL' : 'Local Disk / Memory',
     error: dbError,
     databaseUrlSet: !!process.env.DATABASE_URL,
     timestamp: new Date().toISOString()
@@ -101,19 +144,21 @@ export function getDbStatus() {
 }
 
 function debouncedSave() {
-  if (!pool || !isConnected) return;
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
     saveStateNow().catch((err) => {
-      console.error('[Database] Error in debounced state save:', err.message);
+      console.error('[Database] Error en guardado debounced:', err.message);
     });
-  }, 1000);
+  }, 250);
 }
 
 export async function saveStateNow(): Promise<boolean> {
-  if (!pool || !isConnected) return false;
   try {
     const snapshot = store.getSnapshot();
+    saveToDisk(snapshot);
+
+    if (!pool || !isConnected) return true;
+
     await pool.query(
       `
       INSERT INTO app_state (key, data, updated_at)
@@ -125,7 +170,7 @@ export async function saveStateNow(): Promise<boolean> {
     );
     return true;
   } catch (err: any) {
-    console.error('[Database] Error saving state to PostgreSQL:', err.message);
+    console.error('[Database] Error guardando estado en PostgreSQL:', err.message);
     return false;
   }
 }
