@@ -446,6 +446,124 @@ export const DEMO_OWNERS: Owner[] = [
     coefficient: 7.0000,
     status: 'active',
     createdAt: '2026-01-15T08:00:00Z'
+  },
+  // Owners for complex-2 (Residencial Altos de la Colina P.H.)
+  {
+    id: 'owner-c2-1',
+    complexId: 'complex-2',
+    name: 'Santiago Restrepo Cadavid',
+    documentType: 'CC',
+    documentNumber: '71.234.567',
+    email: 'santiago.restrepo@gmail.com',
+    phone: '+57 300 456 7890',
+    building: 'Torre 1',
+    apartment: 'Apto 301',
+    coefficient: 20.0000,
+    status: 'active',
+    isCouncilMember: true,
+    councilRole: 'Presidente del Consejo',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-c2-2',
+    complexId: 'complex-2',
+    name: 'Valentina Duque Montoya',
+    documentType: 'CC',
+    documentNumber: '43.567.890',
+    email: 'valentina.duque@gmail.com',
+    phone: '+57 311 234 5678',
+    building: 'Torre 1',
+    apartment: 'Apto 302',
+    coefficient: 20.0000,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-c2-3',
+    complexId: 'complex-2',
+    name: 'Mariana Jaramillo Restrepo',
+    documentType: 'CC',
+    documentNumber: '1.017.234.567',
+    email: 'mariana.jaramillo@gmail.com',
+    phone: '+57 318 901 2345',
+    building: 'Torre 2',
+    apartment: 'Apto 401',
+    coefficient: 20.0000,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-c2-4',
+    complexId: 'complex-2',
+    name: 'Camilo Echeverri Vélez',
+    documentType: 'CC',
+    documentNumber: '70.890.123',
+    email: 'camilo.echeverri@gmail.com',
+    phone: '+57 320 678 9012',
+    building: 'Torre 2',
+    apartment: 'Apto 402',
+    coefficient: 20.0000,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-c2-5',
+    complexId: 'complex-2',
+    name: 'Juan Pablo Londoño',
+    documentType: 'CC',
+    documentNumber: '98.765.432',
+    email: 'juan.londono@gmail.com',
+    phone: '+57 315 345 6789',
+    building: 'Torre 3',
+    apartment: 'Apto 501',
+    coefficient: 20.0000,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  // Owners for complex-3 (Condominio Campestre Los Robles)
+  {
+    id: 'owner-c3-1',
+    complexId: 'complex-3',
+    name: 'Rodrigo Caicedo Borrero',
+    documentType: 'CC',
+    documentNumber: '16.789.012',
+    email: 'rodrigo.caicedo@gmail.com',
+    phone: '+57 312 789 0123',
+    building: 'Manzana A',
+    apartment: 'Casa 12',
+    coefficient: 33.3333,
+    status: 'active',
+    isCouncilMember: true,
+    councilRole: 'Presidente del Consejo',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-c3-2',
+    complexId: 'complex-3',
+    name: 'Beatriz Obregón Lloreda',
+    documentType: 'CC',
+    documentNumber: '31.456.789',
+    email: 'beatriz.obregon@gmail.com',
+    phone: '+57 314 567 8901',
+    building: 'Manzana B',
+    apartment: 'Casa 24',
+    coefficient: 33.3333,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
+  },
+  {
+    id: 'owner-c3-3',
+    complexId: 'complex-3',
+    name: 'Álvaro Holguín Scarpetta',
+    documentType: 'CC',
+    documentNumber: '94.123.456',
+    email: 'alvaro.holguin@gmail.com',
+    phone: '+57 317 890 1234',
+    building: 'Manzana C',
+    apartment: 'Casa 05',
+    coefficient: 33.3334,
+    status: 'active',
+    createdAt: '2026-01-15T08:00:00Z'
   }
 ];
 
@@ -473,19 +591,99 @@ export const DEMO_ASSEMBLY: Assembly = {
   startedAt: '2026-08-28T18:15:00Z'
 };
 
-export const DEMO_QUORUM: QuorumAttendance[] = DEMO_OWNERS.map((owner, index) => ({
-  id: `quorum-${owner.id}`,
-  assemblyId: 'assembly-1',
-  ownerId: owner.id,
-  ownerName: owner.name,
-  apartment: owner.apartment,
-  building: owner.building,
-  coefficient: owner.coefficient,
-  checkedIn: index < 10, // 10 present, total 75.75%
-  checkedInAt: index < 10 ? '2026-08-28T18:10:00Z' : undefined,
-  verifiedBy: index < 10 ? 'Carolina Méndez (Administración)' : undefined,
-  notes: owner.hasProxy ? `Representado por apoderado: ${owner.proxyName}` : undefined
-}));
+export const DEMO_ASSEMBLY_COMPLEX_2: Assembly = {
+  id: 'assembly-complex-2-1',
+  complexId: 'complex-2',
+  title: 'Asamblea General Ordinaria Altos de la Colina 2026',
+  type: 'ordinaria',
+  date: '2026-09-02',
+  time: '19:00',
+  location: 'Plataforma Digital VotoSmart',
+  modality: 'virtual',
+  description: 'Aprobación del reglamento interno de parqueaderos, presupuesto de mantenimiento de ascensores y contratación de seguridad privada.',
+  status: 'in_progress',
+  administratorName: 'Andrés Felipe Gómez',
+  presidentName: 'Santiago Restrepo Cadavid',
+  accountantName: 'Dra. Claudia Morales',
+  secretaryName: 'Valentina Duque Montoya',
+  requiredQuorum: 50.01,
+  totalOwnersInvited: 5,
+  representedQuorum: 60.00,
+  checkedInOwnersCount: 3,
+  autoSendMinutes: true,
+  createdAt: '2026-08-15T10:00:00Z',
+  startedAt: '2026-09-02T19:10:00Z'
+};
+
+export const DEMO_ASSEMBLY_COMPLEX_3: Assembly = {
+  id: 'assembly-complex-3-1',
+  complexId: 'complex-3',
+  title: 'Asamblea Extraordinaria Condominio Campestre Los Robles',
+  type: 'extraordinaria',
+  date: '2026-09-10',
+  time: '10:00',
+  location: 'Casa Club & Sala Virtual VotoSmart',
+  modality: 'mixta',
+  description: 'Discusión y votación de proyecto de pavimentación de vía de acceso y cuota extraordinaria de conservación ambiental.',
+  status: 'scheduled',
+  administratorName: 'María Fernanda Eder',
+  presidentName: 'Rodrigo Caicedo Borrero',
+  accountantName: 'C.P. Julián Varela',
+  secretaryName: 'Beatriz Obregón Lloreda',
+  requiredQuorum: 50.01,
+  totalOwnersInvited: 3,
+  representedQuorum: 0,
+  checkedInOwnersCount: 0,
+  autoSendMinutes: true,
+  createdAt: '2026-08-20T10:00:00Z'
+};
+
+export const DEMO_ASSEMBLIES: Assembly[] = [
+  DEMO_ASSEMBLY,
+  DEMO_ASSEMBLY_COMPLEX_2,
+  DEMO_ASSEMBLY_COMPLEX_3
+];
+
+export const DEMO_QUORUM: QuorumAttendance[] = [
+  // Quorum for assembly-1 (complex-1)
+  ...DEMO_OWNERS.filter(o => o.complexId === 'complex-1').map((owner, index) => ({
+    id: `quorum-${owner.id}`,
+    assemblyId: 'assembly-1',
+    ownerId: owner.id,
+    ownerName: owner.name,
+    apartment: owner.apartment,
+    building: owner.building,
+    coefficient: owner.coefficient,
+    checkedIn: index < 10,
+    checkedInAt: index < 10 ? '2026-08-28T18:10:00Z' : undefined,
+    verifiedBy: index < 10 ? 'Carolina Méndez (Administración)' : undefined,
+    notes: owner.hasProxy ? `Representado por apoderado: ${owner.proxyName}` : undefined
+  })),
+  // Quorum for assembly-complex-2-1 (complex-2)
+  ...DEMO_OWNERS.filter(o => o.complexId === 'complex-2').map((owner, index) => ({
+    id: `quorum-${owner.id}`,
+    assemblyId: 'assembly-complex-2-1',
+    ownerId: owner.id,
+    ownerName: owner.name,
+    apartment: owner.apartment,
+    building: owner.building,
+    coefficient: owner.coefficient,
+    checkedIn: index < 3,
+    checkedInAt: index < 3 ? '2026-09-02T19:05:00Z' : undefined,
+    verifiedBy: index < 3 ? 'Andrés Felipe Gómez' : undefined
+  })),
+  // Quorum for assembly-complex-3-1 (complex-3)
+  ...DEMO_OWNERS.filter(o => o.complexId === 'complex-3').map((owner) => ({
+    id: `quorum-${owner.id}`,
+    assemblyId: 'assembly-complex-3-1',
+    ownerId: owner.id,
+    ownerName: owner.name,
+    apartment: owner.apartment,
+    building: owner.building,
+    coefficient: owner.coefficient,
+    checkedIn: false
+  }))
+];
 
 export const DEMO_DOCUMENTS: AssemblyDocument[] = [
   {
@@ -620,9 +818,11 @@ export const DEMO_CANDIDATES: Candidate[] = [
 ];
 
 export const DEMO_VOTES: Vote[] = [
+  // Votes for complex-1 (Torres del Parque)
   {
     id: 'vote-1',
     assemblyId: 'assembly-1',
+    complexId: 'complex-1',
     title: 'Aprobación del Presupuesto Ordinario 2026-2027',
     description: 'Se somete a votación el presupuesto general de gastos ordinarios e inversión proyectado para el periodo Septiembre 2026 - Agosto 2027 por un valor total de $145.000.000 COP, con un incremento de cuota de administración del 7.2% correspondiente al IPC.',
     question: '¿Aprueba usted el Proyecto de Presupuesto Anual 2026-2027 presentado por la Administración y dictaminado por la Contaduría?',
@@ -645,6 +845,7 @@ export const DEMO_VOTES: Vote[] = [
   {
     id: 'vote-2',
     assemblyId: 'assembly-1',
+    complexId: 'complex-1',
     title: 'Elección de Miembros del Consejo de Administración 2026-2028',
     description: 'Elección de los 3 miembros principales del Consejo de Administración para el periodo estatutario de dos años. Puede seleccionar hasta 3 candidatos.',
     question: 'Seleccione hasta tres (3) candidatos para conformar el Consejo de Administración:',
@@ -669,6 +870,7 @@ export const DEMO_VOTES: Vote[] = [
   {
     id: 'vote-3',
     assemblyId: 'assembly-1',
+    complexId: 'complex-1',
     title: 'Selección de Empresa de Vigilancia y Seguridad Privada',
     description: 'Evaluación de las 3 propuestas comerciales y técnicas presentadas para la prestación del servicio de seguridad 24/7 con control de acceso biométrico.',
     question: '¿Cuál empresa de seguridad considera más conveniente para el conjunto?',
@@ -677,6 +879,73 @@ export const DEMO_VOTES: Vote[] = [
       { id: 'opt-sec-a', label: 'Propuesta A: Seguridad Superior Ltda. ($14.200.000/mes)', description: 'Incluye 2 vigilantes 24/7 + botón de pánico + circuito cerrado de TV con 32 cámaras.' },
       { id: 'opt-sec-b', label: 'Propuesta B: Alianza Vigilancia Total ($13.800.000/mes)', description: 'Incluye 2 vigilantes 24/7 + rondas con patrulla motorizada + monitoreo perimetral.' },
       { id: 'opt-sec-c', label: 'Propuesta C: Guardianes Residenciales SAS ($14.900.000/mes)', description: 'Incluye 2 vigilantes armados 24/7 + sistema de detección por IA + póliza extendida.' }
+    ],
+    minSelections: 1,
+    maxSelections: 1,
+    status: 'scheduled',
+    requiresCoefficient: true,
+    isSecret: false,
+    showLiveResults: true,
+    allowAbstain: true
+  },
+  // Votes for complex-2 (Altos de la Colina P.H.)
+  {
+    id: 'vote-c2-1',
+    assemblyId: 'assembly-complex-2-1',
+    complexId: 'complex-2',
+    title: 'Aprobación del Nuevo Reglamento de Parqueaderos',
+    description: 'Reglamentación sobre asignación rotativa semestral de parqueaderos comunes y tarifa solidaria para visitantes.',
+    question: '¿Aprueba usted la actualización del reglamento interno de parqueaderos presentada por el Consejo de Administración?',
+    type: 'yes_no',
+    options: [
+      { id: 'opt-c2-1-yes', label: 'SÍ, APRUEBO EL REGLAMENTO', color: 'emerald' },
+      { id: 'opt-c2-1-no', label: 'NO APRUEBO EL REGLAMENTO', color: 'rose' },
+      { id: 'opt-c2-1-abs', label: 'ME ABSTENGO', color: 'slate' }
+    ],
+    minSelections: 1,
+    maxSelections: 1,
+    status: 'active',
+    requiresCoefficient: true,
+    isSecret: false,
+    showLiveResults: true,
+    allowAbstain: true,
+    startedAt: '2026-09-02T19:25:00Z',
+    totalVoters: 5
+  },
+  {
+    id: 'vote-c2-2',
+    assemblyId: 'assembly-complex-2-1',
+    complexId: 'complex-2',
+    title: 'Modernización del Sistema de Ascensores',
+    description: 'Mantenimiento preventivo mayor y cambio de guayas de tracción para los ascensores de Torre 1 y Torre 2.',
+    question: '¿Aprueba la ejecución del mantenimiento preventivo de ascensores con cargo al fondo de imprevistos?',
+    type: 'yes_no',
+    options: [
+      { id: 'opt-c2-2-yes', label: 'SÍ, APRUEBO EL MANTENIMIENTO', color: 'emerald' },
+      { id: 'opt-c2-2-no', label: 'NO APRUEBO', color: 'rose' },
+      { id: 'opt-c2-2-abs', label: 'ME ABSTENGO', color: 'slate' }
+    ],
+    minSelections: 1,
+    maxSelections: 1,
+    status: 'scheduled',
+    requiresCoefficient: true,
+    isSecret: false,
+    showLiveResults: true,
+    allowAbstain: true
+  },
+  // Votes for complex-3 (Condominio Campestre Los Robles)
+  {
+    id: 'vote-c3-1',
+    assemblyId: 'assembly-complex-3-1',
+    complexId: 'complex-3',
+    title: 'Pavimentación de la Vía Principal de Acceso',
+    description: 'Proyecto de asfaltado en concreto rígido de los 450 metros de vía de acceso vehicular al condominio.',
+    question: '¿Aprueba la cuota extraordinaria para el proyecto de pavimentación en 3 cuotas mensuales?',
+    type: 'yes_no',
+    options: [
+      { id: 'opt-c3-1-yes', label: 'SÍ, APRUEBO LA PAVIMENTACIÓN', color: 'emerald' },
+      { id: 'opt-c3-1-no', label: 'NO APRUEBO', color: 'rose' },
+      { id: 'opt-c3-1-abs', label: 'ME ABSTENGO', color: 'slate' }
     ],
     minSelections: 1,
     maxSelections: 1,

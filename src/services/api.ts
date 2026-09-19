@@ -768,6 +768,26 @@ export const api = {
     return res.json();
   },
 
+  async updateEmailConfig(config: {
+    brevoApiKey?: string;
+    brevoSenderEmail?: string;
+    emailHost?: string;
+    emailPort?: number;
+    emailUsername?: string;
+    emailPassword?: string;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE}/email-service/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al actualizar configuración de correo');
+    }
+    return res.json();
+  },
+
   async verifySmtp(): Promise<{ success: boolean; message: string; durationMs: number }> {
     const res = await fetch(`${API_BASE}/email-service/verify`, { method: 'POST' });
     return res.json();

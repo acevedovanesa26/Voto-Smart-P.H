@@ -1,4 +1,5 @@
 import {
+  DEMO_ASSEMBLIES,
   DEMO_ASSEMBLY,
   DEMO_AUDIT_LOGS,
   DEMO_COMPLEX,
@@ -85,7 +86,7 @@ class DataStore {
   private complex: ResidentialComplex = { ...DEMO_COMPLEXES[0] };
   private users: User[] = [...DEMO_USERS];
   private owners: Owner[] = [...DEMO_OWNERS];
-  private assemblies: Assembly[] = [{ ...DEMO_ASSEMBLY }];
+  private assemblies: Assembly[] = [...DEMO_ASSEMBLIES];
   private quorum: QuorumAttendance[] = [...DEMO_QUORUM];
   private documents: AssemblyDocument[] = [...DEMO_DOCUMENTS];
   private votes: Vote[] = [...DEMO_VOTES];
@@ -138,6 +139,32 @@ class DataStore {
     };
     this.complexes.push(newComplex);
     this.complex = { ...newComplex };
+
+    // Auto-create initial assembly for the new complex to ensure multi-complex isolation
+    const initialAssembly: Assembly = {
+      id: `assembly-${id}-1`,
+      complexId: id,
+      title: `Asamblea General Ordinaria - ${newComplex.name}`,
+      type: 'ordinaria',
+      date: new Date().toISOString().split('T')[0],
+      time: '19:00',
+      location: 'Salón Comunal & Plataforma Digital VotoSmart',
+      modality: 'mixta',
+      description: `Asamblea general de copropietarios de la copropiedad ${newComplex.name}. Gestión y votaciones 100% aisladas.`,
+      status: 'scheduled',
+      administratorName: 'Administración P.H.',
+      presidentName: 'Por designar',
+      accountantName: 'Por designar',
+      secretaryName: 'Por designar',
+      requiredQuorum: 50.01,
+      totalOwnersInvited: 0,
+      representedQuorum: 0,
+      checkedInOwnersCount: 0,
+      autoSendMinutes: true,
+      createdAt: new Date().toISOString()
+    };
+    this.assemblies.unshift(initialAssembly);
+
     this.addAuditLog('user-admin', 'Administrador', 'admin', 'CREACION_CONJUNTO', `Creación de nuevo conjunto residencial: ${newComplex.name}`);
     this.notifyChange();
     return newComplex;
@@ -1399,16 +1426,47 @@ class DataStore {
     if (!targetId || targetId === 'all') {
       return this.assemblies;
     }
-    return this.assemblies.filter((a) => a.complexId === targetId);
+    let list = this.assemblies.filter((a) => a.complexId === targetId);
+    if (list.length === 0) {
+      const c = this.getComplexById(targetId);
+      if (c) {
+        const autoAsm: Assembly = {
+          id: `assembly-${targetId}-1`,
+          complexId: targetId,
+          title: `Asamblea General Ordinaria - ${c.name}`,
+          type: 'ordinaria',
+          date: new Date().toISOString().split('T')[0],
+          time: '19:00',
+          location: 'Salón Comunal & Plataforma Digital VotoSmart',
+          modality: 'mixta',
+          description: `Asamblea general de copropietarios de ${c.name}.`,
+          status: 'scheduled',
+          administratorName: 'Administración P.H.',
+          presidentName: 'Por designar',
+          accountantName: 'Por designar',
+          secretaryName: 'Por designar',
+          requiredQuorum: 50.01,
+          totalOwnersInvited: this.getOwners(targetId).length,
+          representedQuorum: 0,
+          checkedInOwnersCount: 0,
+          autoSendMinutes: true,
+          createdAt: new Date().toISOString()
+        };
+        this.assemblies.unshift(autoAsm);
+        list = [autoAsm];
+        this.notifyChange();
+      }
+    }
+    return list;
   }
 
   getAssemblyById(id: string) {
     return this.assemblies.find((a) => a.id === id);
   }
 
-  createAssembly(data: Omit<Assembly, 'id' | 'complexId' | 'createdAt' | 'representedQuorum' | 'checkedInOwnersCount'>) {
+  createAssembly(data: Omit<Assembly, 'id' | 'complexId' | 'createdAt' | 'representedQuorum' | 'checkedInOwnersCount'> & { complexId?: string }) {
     const id = `assembly-${Date.now()}`;
-    const targetComplexId = this.complex.id;
+    const targetComplexId = data.complexId || this.complex.id;
     const newAssembly: Assembly = {
       id,
       complexId: targetComplexId,
@@ -1527,6 +1585,13 @@ class DataStore {
     return this.votes.filter((v) => v.assemblyId === assemblyId);
   }
 
+  getVotesByComplex(complexId?: string): Vote[] {
+    const targetComplexId = complexId || this.complex?.id;
+    if (!targetComplexId) return this.votes;
+    const assemblyIds = new Set(this.assemblies.filter((a) => a.complexId === targetComplexId).map((a) => a.id));
+    return this.votes.filter((v) => (v.complexId && v.complexId === targetComplexId) || assemblyIds.has(v.assemblyId));
+  }
+
   getVoteById(id: string) {
     return this.votes.find((v) => v.id === id);
   }
@@ -1642,11 +1707,12 @@ class DataStore {
   createVote(data: Omit<Vote, 'id' | 'status' | 'startedAt' | 'closedAt' | 'closedBy'>) {
     const id = `vote-${Date.now()}`;
     const assembly = this.assemblies.find((a) => a.id === data.assemblyId);
-    const complexId = assembly?.complexId || this.complex.id;
+    const complexId = (data as any).complexId || assembly?.complexId || this.complex.id;
     const eligibleVoters = this.getEligibleVotersForVoteConfig(complexId, data.filterConfig);
 
     const newVote: Vote = {
       id,
+      complexId,
       ...data,
       status: 'scheduled',
       eligibleVotersCount: eligibleVoters.length,
@@ -1658,8 +1724,11 @@ class DataStore {
       'Carolina Méndez',
       'admin',
       'CREACIÓN_VOTACIÓN',
-      `Creación de votación: "${newVote.title}" (${newVote.type}, Filtro: ${data.filterConfig?.filterType || 'general'}, Habilitados: ${eligibleVoters.length})`
+      `Creación de votación: "${newVote.title}" (${newVote.type}, Filtro: ${data.filterConfig?.filterType || 'general'}, Habilitados: ${eligibleVoters.length})`,
+      newVote.assemblyId,
+      complexId
     );
+    this.notifyChange();
     return newVote;
   }
 
@@ -1671,6 +1740,7 @@ class DataStore {
     vote.status = 'active';
     vote.startedAt = new Date().toISOString();
     this.addAuditLog('user-admin', startedBy, 'admin', 'APERTURA_VOTACIÓN', `Apertura formal de votación: "${vote.title}"`);
+    this.notifyChange();
     return vote;
   }
 
@@ -1692,6 +1762,7 @@ class DataStore {
       'CIERRE_VOTACIÓN',
       `Cierre oficial de votación: "${vote.title}". Votos computados: ${results.totalVotesCount}, Coeficiente: ${results.totalCoefficientSum.toFixed(2)}%`
     );
+    this.notifyChange();
 
     return { vote, results };
   }
@@ -1702,7 +1773,7 @@ class DataStore {
 
     const existing = this.votes[idx];
     const assembly = this.assemblies.find((a) => a.id === existing.assemblyId);
-    const complexId = assembly?.complexId || this.complex.id;
+    const complexId = existing.complexId || assembly?.complexId || this.complex.id;
 
     // Recalculate eligible voters if filterConfig changed
     let eligibleCount = existing.eligibleVotersCount;
@@ -1716,6 +1787,7 @@ class DataStore {
       ...updateData,
       id: existing.id,
       assemblyId: existing.assemblyId,
+      complexId: existing.complexId || complexId,
       eligibleVotersCount: eligibleCount ?? existing.eligibleVotersCount,
       totalVoters: eligibleCount ?? existing.totalVoters
     };
@@ -2263,19 +2335,27 @@ class DataStore {
     if (!snapshot || typeof snapshot !== 'object') return;
     try {
       if (Array.isArray(snapshot.complexes) && snapshot.complexes.length > 0) {
-        this.complexes = snapshot.complexes;
+        const existingComplexIds = new Set(snapshot.complexes.map((c: any) => c.id));
+        const missingDemoComplexes = DEMO_COMPLEXES.filter((dc) => !existingComplexIds.has(dc.id));
+        this.complexes = [...snapshot.complexes, ...missingDemoComplexes];
       }
       if (snapshot.complex && snapshot.complex.id) {
         this.complex = snapshot.complex;
       }
       if (Array.isArray(snapshot.users) && snapshot.users.length > 0) {
-        this.users = snapshot.users;
+        const existingUserIds = new Set(snapshot.users.map((u: any) => u.id));
+        const missingUsers = DEMO_USERS.filter((du) => !existingUserIds.has(du.id));
+        this.users = [...snapshot.users, ...missingUsers];
       }
       if (Array.isArray(snapshot.owners) && snapshot.owners.length > 0) {
-        this.owners = snapshot.owners;
+        const existingOwnerIds = new Set(snapshot.owners.map((o: any) => o.id));
+        const missingOwners = DEMO_OWNERS.filter((do_) => !existingOwnerIds.has(do_.id));
+        this.owners = [...snapshot.owners, ...missingOwners];
       }
       if (Array.isArray(snapshot.assemblies) && snapshot.assemblies.length > 0) {
-        this.assemblies = snapshot.assemblies;
+        const existingAsmIds = new Set(snapshot.assemblies.map((a: any) => a.id));
+        const missingAsm = DEMO_ASSEMBLIES.filter((da) => !existingAsmIds.has(da.id));
+        this.assemblies = [...snapshot.assemblies, ...missingAsm];
       }
       if (Array.isArray(snapshot.quorum)) {
         this.quorum = snapshot.quorum;
@@ -2284,7 +2364,9 @@ class DataStore {
         this.documents = snapshot.documents;
       }
       if (Array.isArray(snapshot.votes)) {
-        this.votes = snapshot.votes;
+        const existingVoteIds = new Set(snapshot.votes.map((v: any) => v.id));
+        const missingVotes = DEMO_VOTES.filter((dv) => !existingVoteIds.has(dv.id));
+        this.votes = [...snapshot.votes, ...missingVotes];
       }
       if (Array.isArray(snapshot.voteRecords)) {
         this.voteRecords = snapshot.voteRecords;

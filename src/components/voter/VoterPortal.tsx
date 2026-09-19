@@ -84,9 +84,17 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
   const loadVoterData = async () => {
     try {
       setIsLoading(true);
+      let targetAssemblyId = assemblyId;
+      if (complex?.id) {
+        const assemblies = await api.getAssemblies(complex.id);
+        const match = assemblies.find((a) => a.id === targetAssemblyId);
+        if (!match && assemblies.length > 0) {
+          targetAssemblyId = assemblies[0].id;
+        }
+      }
       const [asm, vList] = await Promise.all([
-        api.getAssembly(assemblyId),
-        api.getVotes(assemblyId)
+        api.getAssembly(targetAssemblyId),
+        api.getVotes(targetAssemblyId)
       ]);
       setAssembly(asm);
       setVotes(vList);

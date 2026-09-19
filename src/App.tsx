@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { api } from './services/api';
 import { AssemblyDetail } from './components/assembly/AssemblyDetail';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
 import { LoginModal } from './components/auth/LoginModal';
@@ -19,7 +20,7 @@ import { VoterPortal } from './components/voter/VoterPortal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function MainContent() {
-  const { user, isAuthenticated, role } = useAuth();
+  const { user, isAuthenticated, role, complex } = useAuth();
   const [currentView, setCurrentView] = useState<'auth_decision' | 'dashboard' | 'assembly' | 'owners' | 'voter'>('auth_decision');
   const [selectedAssemblyId, setSelectedAssemblyId] = useState<string>('assembly-1');
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -28,6 +29,19 @@ function MainContent() {
   const [forgotPasswordIdentifier, setForgotPasswordIdentifier] = useState('');
   const [showComplexModal, setShowComplexModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // Auto-sync selected assembly when active complex changes
+  useEffect(() => {
+    if (!complex?.id) return;
+    api.getAssemblies(complex.id).then((assemblies) => {
+      if (assemblies && assemblies.length > 0) {
+        const exists = assemblies.some((a) => a.id === selectedAssemblyId);
+        if (!exists) {
+          setSelectedAssemblyId(assemblies[0].id);
+        }
+      }
+    }).catch(console.error);
+  }, [complex?.id]);
 
   // If user is authenticated, route to appropriate default view if on login screen
   const activeDisplayView = !isAuthenticated ? 'auth_decision' : (currentView === 'auth_decision' ? (role === 'owner' ? 'voter' : 'dashboard') : currentView);

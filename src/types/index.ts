@@ -157,6 +157,7 @@ export interface VoteFilterConfig {
 export interface Vote {
   id: string;
   assemblyId: string;
+  complexId?: string;
   title: string;
   description: string;
   question: string;

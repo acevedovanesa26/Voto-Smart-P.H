@@ -3,7 +3,7 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
-import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection } from './server/emailService';
+import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection, updateRuntimeEmailConfig } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
@@ -694,6 +694,14 @@ app.delete('/api/assemblies/:id/documents/:docId', (req, res) => {
 });
 
 // 8. Votes & Elections
+app.get('/api/votes', (req, res) => {
+  const { complexId, assemblyId } = req.query;
+  if (assemblyId) {
+    return res.json(store.getVotesByAssembly(assemblyId as string));
+  }
+  return res.json(store.getVotesByComplex(complexId as string));
+});
+
 app.get('/api/assemblies/:id/votes', (req, res) => {
   res.json(store.getVotesByAssembly(req.params.id));
 });
@@ -704,8 +712,11 @@ app.post('/api/assemblies/:id/votes', (req, res) => {
     if (!title || !question || !type || !options || options.length < 2) {
       return res.status(400).json({ error: 'Debe ingresar título, pregunta y al menos dos opciones' });
     }
+    const assembly = store.getAssemblyById(req.params.id);
+    const targetComplexId = req.body.complexId || assembly?.complexId || store.getComplex().id;
     const newVote = store.createVote({
       assemblyId: req.params.id,
+      complexId: targetComplexId,
       ...req.body
     });
     res.status(201).json(newVote);
@@ -966,6 +977,27 @@ app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
 // Email Service Diagnostics & History Endpoints
 app.get('/api/email-service/status', (req, res) => {
   res.json(getEmailServiceStatus());
+});
+
+app.post('/api/email-service/config', (req, res) => {
+  try {
+    const { brevoApiKey, brevoSenderEmail, emailHost, emailPort, emailUsername, emailPassword } = req.body;
+    updateRuntimeEmailConfig({
+      brevoApiKey,
+      brevoSenderEmail,
+      emailHost,
+      emailPort: emailPort ? parseInt(emailPort, 10) : undefined,
+      emailUsername,
+      emailPassword
+    });
+    res.json({
+      success: true,
+      message: 'Configuración del servicio de correo actualizada.',
+      status: getEmailServiceStatus()
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 app.post('/api/email-service/verify', async (req, res) => {
