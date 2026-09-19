@@ -1,10 +1,9 @@
-import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
-import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection, updateRuntimeEmailConfig, initEmailService } from './server/emailService';
+import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection, updateRuntimeEmailConfig } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
@@ -1113,17 +1112,9 @@ async function startServer() {
     console.error('Error in initDb:', err);
   });
 
-  // Initialize Email Service (restores configuration from PostgreSQL)
-  await initEmailService().catch((err) => {
-    console.error('Error in initEmailService:', err);
-  });
-
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: false
-      },
+      server: { middlewareMode: true },
       appType: 'spa'
     });
     app.use(vite.middlewares);

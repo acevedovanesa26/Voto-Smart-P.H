@@ -1,0 +1,2270 @@
+{
+  "complexes": [
+    {
+      "id": "complex-1",
+      "nit": "900.876.543-1",
+      "city": "Bogotá D.C.",
+      "logo": "🏢",
+      "name": "Conjunto Residencial Torres del Parque P.H.",
+      "email": "administracion@torresdelparque.com",
+      "phone": "(+57) 601 745 8900",
+      "state": "Cundinamarca",
+      "address": "Calle 140 # 19-45",
+      "timezone": "America/Bogota",
+      "totalUnits": 14,
+      "autoSendResults": true,
+      "totalCoefficient": 100
+    },
+    {
+      "id": "complex-2",
+      "nit": "901.233.567-1",
+      "city": "Medellín",
+      "logo": "🌲",
+      "name": "Residencial Altos de la Colina P.H.",
+      "email": "contacto@altosdelacolina.com",
+      "phone": "(+57) 604 321 9088",
+      "state": "Antioquia",
+      "address": "Carrera 43A # 18 Sur - 60",
+      "timezone": "America/Bogota",
+      "totalUnits": 84,
+      "autoSendResults": true,
+      "totalCoefficient": 100
+    },
+    {
+      "id": "complex-3",
+      "nit": "900.554.890-4",
+      "city": "Cali",
+      "logo": "🏡",
+      "name": "Condominio Campestre Los Robles",
+      "email": "admin@losroblescali.com",
+      "phone": "(+57) 602 555 4321",
+      "state": "Valle del Cauca",
+      "address": "Avenida Cañasgordas Km 4",
+      "timezone": "America/Bogota",
+      "totalUnits": 45,
+      "autoSendResults": false,
+      "totalCoefficient": 100
+    }
+  ],
+  "complex": {
+    "id": "complex-1",
+    "nit": "900.876.543-1",
+    "city": "Bogotá D.C.",
+    "logo": "🏢",
+    "name": "Conjunto Residencial Torres del Parque P.H.",
+    "email": "administracion@torresdelparque.com",
+    "phone": "(+57) 601 745 8900",
+    "state": "Cundinamarca",
+    "address": "Calle 140 # 19-45",
+    "timezone": "America/Bogota",
+    "totalUnits": 14,
+    "autoSendResults": true,
+    "totalCoefficient": 100
+  },
+  "users": [
+    {
+      "id": "user-admin",
+      "name": "Vanesa Alexandra Acevedo",
+      "role": "admin",
+      "email": "motatovanesa@gmail.com",
+      "phone": "+57 316 738 5026",
+      "status": "active",
+      "building": "Torre Adm",
+      "apartment": "Oficina Admón",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-10T08:00:00Z",
+      "coefficient": 0,
+      "documentType": "CC",
+      "documentNumber": "1.006.876.597"
+    },
+    {
+      "id": "user-president",
+      "name": "Dr. Gustavo Petro Ortiz",
+      "role": "president",
+      "email": "presidente@torresdelparque.com",
+      "phone": "+57 315 444 3322",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 502",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-12T09:30:00Z",
+      "coefficient": 7.45,
+      "documentType": "CC",
+      "documentNumber": "19.450.880"
+    },
+    {
+      "id": "user-accountant",
+      "name": "C.P. Fernando Valdés Ruiz",
+      "role": "accountant",
+      "email": "contador@torresdelparque.com",
+      "phone": "+57 300 222 1199",
+      "status": "active",
+      "building": "Torre Adm",
+      "apartment": "Auditoría",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T10:00:00Z",
+      "coefficient": 0,
+      "documentType": "CC",
+      "documentNumber": "79.340.111"
+    },
+    {
+      "id": "user-superadmin",
+      "name": "Ing. Santiago Morales (Plataforma)",
+      "role": "superadmin",
+      "email": "superadmin@votosmart.app",
+      "phone": "+57 320 000 9999",
+      "status": "active",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "documentType": "CC",
+      "documentNumber": "80.111.222"
+    },
+    {
+      "id": "user-owner-1788548545294-7h2mo",
+      "name": "Eomaida Motato Largo",
+      "role": "owner",
+      "email": "omairamotato28@gmail.com",
+      "phone": "",
+      "status": "active",
+      "building": "Torre F",
+      "apartment": "Apto 303",
+      "complexId": "complex-1",
+      "createdAt": "2026-09-04T19:02:25.294Z",
+      "coefficient": 1.25,
+      "documentType": "CC",
+      "documentNumber": "30.382.944"
+    },
+    {
+      "id": "user-owner-vanesa",
+      "name": "Vanesa Motato",
+      "role": "owner",
+      "email": "motatovanesa@gmail.com",
+      "phone": "+57 310 123 4567",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 401",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-20T10:00:00Z",
+      "coefficient": 8.5,
+      "documentType": "CC",
+      "documentNumber": "1.098.765.432"
+    },
+    {
+      "id": "user-admin",
+      "name": "Carolina Méndez Rojas",
+      "role": "admin",
+      "email": "admin@votosmart.app",
+      "phone": "+57 310 987 6543",
+      "status": "active",
+      "building": "Torre Adm",
+      "apartment": "Oficina Admón",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-10T08:00:00Z",
+      "coefficient": 0,
+      "documentType": "CC",
+      "documentNumber": "52.987.123"
+    },
+    {
+      "id": "user-owner-1",
+      "name": "Carlos Arturo Ruiz",
+      "role": "owner",
+      "email": "carlos.ruiz@gmail.com",
+      "phone": "+57 312 345 6789",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 302",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-20T10:00:00Z",
+      "coefficient": 7.85,
+      "documentType": "CC",
+      "documentNumber": "79.845.612"
+    },
+    {
+      "id": "user-owner-2",
+      "name": "Elena Gómez Restrepo",
+      "role": "owner",
+      "email": "elena.gomez@hotmail.com",
+      "phone": "+57 318 765 4321",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 101",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-20T10:00:00Z",
+      "coefficient": 8.2,
+      "documentType": "CC",
+      "documentNumber": "41.905.432"
+    },
+    {
+      "id": "user-owner-3",
+      "name": "Roberto Domínguez Silva",
+      "role": "owner",
+      "email": "roberto.dominguez@yahoo.es",
+      "phone": "+57 314 555 8899",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 501",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-20T10:00:00Z",
+      "coefficient": 6.95,
+      "documentType": "CC",
+      "documentNumber": "19.876.543"
+    },
+    {
+      "id": "user-owner-fernando",
+      "name": "Fernando Gómez Vargas",
+      "role": "owner",
+      "email": "fernando.gomez@outlook.com",
+      "phone": "+57 315 888 9911",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 201",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-20T10:00:00Z",
+      "coefficient": 7.5,
+      "documentType": "CC",
+      "documentNumber": "1.020.345.678"
+    }
+  ],
+  "owners": [
+    {
+      "id": "owner-1788548545294-7h2mo",
+      "name": "Eomaida Motato Largo",
+      "email": "omairamotato28@gmail.com",
+      "phone": "",
+      "status": "active",
+      "building": "Torre F",
+      "hasProxy": false,
+      "apartment": "Apto 303",
+      "complexId": "complex-1",
+      "createdAt": "2026-09-04T19:02:25.294Z",
+      "proxyName": "",
+      "coefficient": 1.25,
+      "documentType": "CC",
+      "documentNumber": "30.382.944"
+    },
+    {
+      "id": "owner-vanesa",
+      "name": "Vanesa Motato",
+      "email": "motatovanesa@gmail.com",
+      "phone": "+57 310 123 4567",
+      "status": "active",
+      "building": "Torre A",
+      "hasProxy": false,
+      "apartment": "Apto 401",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "proxyName": "",
+      "coefficient": 8.5,
+      "documentType": "CC",
+      "documentNumber": "1.098.765.432"
+    },
+    {
+      "id": "owner-ucentral",
+      "name": "Copropietario Universidad Central",
+      "email": "comunidad@ucentral.edu.co",
+      "phone": "+57 312 999 8877",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 502",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 8,
+      "documentType": "CC",
+      "documentNumber": "52.987.654"
+    },
+    {
+      "id": "owner-fernando",
+      "name": "Fernando Gómez Vargas",
+      "email": "fernando.gomez@outlook.com",
+      "phone": "+57 315 888 9911",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 201",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.5,
+      "councilRole": "Consejero Principal",
+      "documentType": "CC",
+      "documentNumber": "1.020.345.678",
+      "isCouncilMember": true
+    },
+    {
+      "id": "owner-1",
+      "name": "Carlos Arturo Ruiz",
+      "email": "carlos.ruiz@gmail.com",
+      "phone": "+57 312 345 6789",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 302",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.85,
+      "documentType": "CC",
+      "documentNumber": "79.845.612"
+    },
+    {
+      "id": "owner-2",
+      "name": "Elena Gómez Restrepo",
+      "email": "elena.gomez@hotmail.com",
+      "phone": "+57 318 765 4321",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 101",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 8.2,
+      "documentType": "CC",
+      "documentNumber": "41.905.432"
+    },
+    {
+      "id": "owner-3",
+      "name": "Roberto Domínguez Silva",
+      "email": "roberto.dominguez@yahoo.es",
+      "phone": "+57 314 555 8899",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 501",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 6.95,
+      "documentType": "CC",
+      "documentNumber": "19.876.543"
+    },
+    {
+      "id": "owner-4",
+      "name": "Gloria Patricia Ángel",
+      "email": "gloria.angel@gmail.com",
+      "phone": "+57 311 223 3445",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 402",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.5,
+      "documentType": "CC",
+      "documentNumber": "51.990.234"
+    },
+    {
+      "id": "owner-5",
+      "name": "Andrés Felipe Silva Pardo",
+      "email": "andres.silva@outlook.com",
+      "phone": "+57 301 998 8776",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 204",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.1,
+      "documentType": "CC",
+      "documentNumber": "80.450.910"
+    },
+    {
+      "id": "owner-6",
+      "name": "Martha Cecilia Quintero",
+      "email": "martha.quintero@gmail.com",
+      "phone": "+57 316 777 4433",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 201",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 6.8,
+      "documentType": "CC",
+      "documentNumber": "39.870.123"
+    },
+    {
+      "id": "owner-7",
+      "name": "Dr. Gustavo Petro Ortiz",
+      "email": "presidente@torresdelparque.com",
+      "phone": "+57 315 444 3322",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 502",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.45,
+      "documentType": "CC",
+      "documentNumber": "19.450.880"
+    },
+    {
+      "id": "owner-8",
+      "name": "Inversiones & Bienes Los Sauces SAS",
+      "email": "contacto@saucesinversiones.com",
+      "phone": "+57 601 234 5678",
+      "status": "active",
+      "building": "Torre A",
+      "hasProxy": true,
+      "apartment": "Apto 102",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "proxyName": "Abog. Natalia Osorio (Poder Notarial)",
+      "coefficient": 8.5,
+      "documentType": "NIT",
+      "documentNumber": "901.234.567-8"
+    },
+    {
+      "id": "owner-9",
+      "name": "Jorge Eliécer Gaitán Mora",
+      "email": "jorge.gaitan@gmail.com",
+      "phone": "+57 317 888 9900",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 401",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 6.95,
+      "documentType": "CC",
+      "documentNumber": "79.112.334"
+    },
+    {
+      "id": "owner-10",
+      "name": "Lucía Fernández Mendoza",
+      "email": "lucia.fernandez@gmail.com",
+      "phone": "+57 313 444 5566",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 301",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.6,
+      "documentType": "CC",
+      "documentNumber": "52.765.432"
+    },
+    {
+      "id": "owner-11",
+      "name": "Mauricio Téllez Cárdenas",
+      "email": "mauricio.tellez@hotmail.com",
+      "phone": "+57 300 665 4433",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 201",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.2,
+      "documentType": "CC",
+      "documentNumber": "80.789.012"
+    },
+    {
+      "id": "owner-12",
+      "name": "Patricia Escobar Jaramillo",
+      "email": "patricia.escobar@gmail.com",
+      "phone": "+57 319 332 2110",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 102",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 8.1,
+      "documentType": "CC",
+      "documentNumber": "43.210.987"
+    },
+    {
+      "id": "owner-13",
+      "name": "Héctor Fabio Ramírez",
+      "email": "hector.ramirez@yahoo.com",
+      "phone": "+57 310 112 3344",
+      "status": "active",
+      "building": "Torre A",
+      "apartment": "Apto 301",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7.5,
+      "documentType": "CC",
+      "documentNumber": "14.890.123"
+    },
+    {
+      "id": "owner-14",
+      "name": "Diana Marcela Bejarano",
+      "email": "diana.bejarano@gmail.com",
+      "phone": "+57 315 990 0112",
+      "status": "active",
+      "building": "Torre B",
+      "apartment": "Apto 401",
+      "complexId": "complex-1",
+      "createdAt": "2026-01-15T08:00:00Z",
+      "coefficient": 7,
+      "documentType": "CC",
+      "documentNumber": "53.001.992"
+    }
+  ],
+  "assemblies": [
+    {
+      "id": "assembly-1789090185500",
+      "date": "2026-09-10",
+      "time": "20:00",
+      "type": "ordinaria",
+      "title": "Asamblea Extraordinaria de Propietarios - Fachadas y Seguridad 2026",
+      "status": "scheduled",
+      "location": "Salón Social & Sala Virtual VotoSmart",
+      "modality": "mixta",
+      "complexId": "complex-1",
+      "createdAt": "2026-09-11T01:29:45.500Z",
+      "description": "Aprobación de cuota extraordinaria para impermeabilización de fachadas y renovación de equipos de seguridad electrónica.",
+      "presidentName": "Dr. Gustavo Petro Ortiz",
+      "secretaryName": "Martha Cecilia Quintero",
+      "accountantName": "C.P. Fernando Valdés Ruiz",
+      "requiredQuorum": 50.01,
+      "autoSendMinutes": true,
+      "administratorName": "Carolina Méndez Rojas",
+      "representedQuorum": 8.5,
+      "totalOwnersInvited": 14,
+      "checkedInOwnersCount": 1
+    },
+    {
+      "id": "assembly-1789086530481",
+      "date": "2026-09-10",
+      "time": "19:00",
+      "type": "ordinaria",
+      "title": "Asamblea Extraordinaria de Propietarios - Fachadas y Seguridad 2026",
+      "status": "scheduled",
+      "location": "Meet",
+      "modality": "virtual",
+      "complexId": "complex-3",
+      "createdAt": "2026-09-11T00:28:50.481Z",
+      "description": "Aprobación de cuota extraordinaria para impermeabilización de fachadas y renovación de equipos de seguridad electrónica.",
+      "presidentName": "Dr. Gustavo Petro Ortiz",
+      "secretaryName": "Martha Cecilia Quintero",
+      "accountantName": "C.P. Fernando Valdés Ruiz",
+      "requiredQuorum": 50.01,
+      "autoSendMinutes": true,
+      "administratorName": "Vanesa Acevedo",
+      "representedQuorum": 0,
+      "totalOwnersInvited": 14,
+      "checkedInOwnersCount": 0
+    },
+    {
+      "id": "assembly-1",
+      "date": "2026-08-28",
+      "time": "18:00",
+      "type": "ordinaria",
+      "title": "Asamblea General Ordinaria de Copropietarios 2026-2027",
+      "status": "in_progress",
+      "location": "Salón Comunal & Transmisión Virtual VotoSmart",
+      "modality": "mixta",
+      "complexId": "complex-1",
+      "createdAt": "2026-08-10T10:00:00Z",
+      "startedAt": "2026-08-28T18:15:00Z",
+      "description": "Revisión y aprobación de Estados Financieros 2025, Presupuesto Anual 2026-2027, Elección del Consejo de Administración y Selección de Empresa de Seguridad.",
+      "presidentName": "Dr. Gustavo Petro Ortiz",
+      "secretaryName": "Martha Cecilia Quintero",
+      "accountantName": "C.P. Fernando Valdés Ruiz",
+      "requiredQuorum": 50.01,
+      "autoSendMinutes": true,
+      "administratorName": "Carolina Méndez Rojas",
+      "representedQuorum": 74.9,
+      "totalOwnersInvited": 14,
+      "checkedInOwnersCount": 10
+    }
+  ],
+  "quorum": [
+    {
+      "id": "quorum-assembly-1789090185500-owner-1788548545294-7h2mo",
+      "ownerId": "owner-1788548545294-7h2mo",
+      "building": "Torre F",
+      "apartment": "Apto 303",
+      "checkedIn": false,
+      "ownerName": "Eomaida Motato Largo",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 1.25
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-vanesa",
+      "ownerId": "owner-vanesa",
+      "building": "Torre A",
+      "apartment": "Apto 401",
+      "checkedIn": true,
+      "ownerName": "Vanesa Motato",
+      "assemblyId": "assembly-1789090185500",
+      "verifiedBy": "Ingreso Virtual OTP",
+      "checkedInAt": "2026-09-11T19:31:39.399Z",
+      "coefficient": 8.5
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-ucentral",
+      "ownerId": "owner-ucentral",
+      "building": "Torre A",
+      "apartment": "Apto 502",
+      "checkedIn": false,
+      "ownerName": "Copropietario Universidad Central",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 8
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-fernando",
+      "ownerId": "owner-fernando",
+      "building": "Torre B",
+      "apartment": "Apto 201",
+      "checkedIn": false,
+      "ownerName": "Fernando Gómez Vargas",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.5
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-1",
+      "ownerId": "owner-1",
+      "building": "Torre A",
+      "apartment": "Apto 302",
+      "checkedIn": false,
+      "ownerName": "Carlos Arturo Ruiz",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.85
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-2",
+      "ownerId": "owner-2",
+      "building": "Torre B",
+      "apartment": "Apto 101",
+      "checkedIn": false,
+      "ownerName": "Elena Gómez Restrepo",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 8.2
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-3",
+      "ownerId": "owner-3",
+      "building": "Torre A",
+      "apartment": "Apto 501",
+      "checkedIn": false,
+      "ownerName": "Roberto Domínguez Silva",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 6.95
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-4",
+      "ownerId": "owner-4",
+      "building": "Torre B",
+      "apartment": "Apto 402",
+      "checkedIn": false,
+      "ownerName": "Gloria Patricia Ángel",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.5
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-5",
+      "ownerId": "owner-5",
+      "building": "Torre A",
+      "apartment": "Apto 204",
+      "checkedIn": false,
+      "ownerName": "Andrés Felipe Silva Pardo",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.1
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-6",
+      "ownerId": "owner-6",
+      "building": "Torre B",
+      "apartment": "Apto 201",
+      "checkedIn": false,
+      "ownerName": "Martha Cecilia Quintero",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 6.8
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-7",
+      "ownerId": "owner-7",
+      "building": "Torre B",
+      "apartment": "Apto 502",
+      "checkedIn": false,
+      "ownerName": "Dr. Gustavo Petro Ortiz",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.45
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-8",
+      "ownerId": "owner-8",
+      "building": "Torre A",
+      "apartment": "Apto 102",
+      "checkedIn": false,
+      "ownerName": "Inversiones & Bienes Los Sauces SAS",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 8.5
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-9",
+      "ownerId": "owner-9",
+      "building": "Torre A",
+      "apartment": "Apto 401",
+      "checkedIn": false,
+      "ownerName": "Jorge Eliécer Gaitán Mora",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 6.95
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-10",
+      "ownerId": "owner-10",
+      "building": "Torre B",
+      "apartment": "Apto 301",
+      "checkedIn": false,
+      "ownerName": "Lucía Fernández Mendoza",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.6
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-11",
+      "ownerId": "owner-11",
+      "building": "Torre A",
+      "apartment": "Apto 201",
+      "checkedIn": false,
+      "ownerName": "Mauricio Téllez Cárdenas",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.2
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-12",
+      "ownerId": "owner-12",
+      "building": "Torre B",
+      "apartment": "Apto 102",
+      "checkedIn": false,
+      "ownerName": "Patricia Escobar Jaramillo",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 8.1
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-13",
+      "ownerId": "owner-13",
+      "building": "Torre A",
+      "apartment": "Apto 301",
+      "checkedIn": false,
+      "ownerName": "Héctor Fabio Ramírez",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7.5
+    },
+    {
+      "id": "quorum-assembly-1789090185500-owner-14",
+      "ownerId": "owner-14",
+      "building": "Torre B",
+      "apartment": "Apto 401",
+      "checkedIn": false,
+      "ownerName": "Diana Marcela Bejarano",
+      "assemblyId": "assembly-1789090185500",
+      "coefficient": 7
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-1",
+      "name": "Convocatoria_Oficial_Asamblea_2026.pdf",
+      "type": "convocatoria",
+      "fileUrl": "#",
+      "fileSize": "1.4 MB",
+      "assemblyId": "assembly-1",
+      "uploadedAt": "2026-08-10T14:30:00Z",
+      "uploadedBy": "Carolina Méndez"
+    },
+    {
+      "id": "doc-2",
+      "name": "Acta_Asamblea_Anterior_No_34.pdf",
+      "type": "acta_anterior",
+      "fileUrl": "#",
+      "fileSize": "3.2 MB",
+      "assemblyId": "assembly-1",
+      "uploadedAt": "2026-08-10T14:32:00Z",
+      "uploadedBy": "Carolina Méndez"
+    },
+    {
+      "id": "doc-3",
+      "name": "Estados_Financieros_Dictaminados_2025.pdf",
+      "type": "estados_financieros",
+      "fileUrl": "#",
+      "fileSize": "4.8 MB",
+      "assemblyId": "assembly-1",
+      "uploadedAt": "2026-08-12T11:20:00Z",
+      "uploadedBy": "C.P. Fernando Valdés"
+    },
+    {
+      "id": "doc-4",
+      "name": "Proyecto_Presupuesto_Vigencia_2026_2027.xlsx",
+      "type": "estados_financieros",
+      "fileUrl": "#",
+      "fileSize": "890 KB",
+      "assemblyId": "assembly-1",
+      "uploadedAt": "2026-08-12T11:25:00Z",
+      "uploadedBy": "C.P. Fernando Valdés"
+    },
+    {
+      "id": "doc-5",
+      "name": "Reglamento_Propiedad_Horizontal.pdf",
+      "type": "reglamento",
+      "fileUrl": "#",
+      "fileSize": "5.6 MB",
+      "assemblyId": "assembly-1",
+      "uploadedAt": "2026-08-10T14:35:00Z",
+      "uploadedBy": "Carolina Méndez"
+    }
+  ],
+  "votes": [
+    {
+      "id": "vote-1",
+      "type": "yes_no",
+      "title": "Aprobación del Presupuesto Ordinario 2026-2027",
+      "status": "active",
+      "options": [
+        {
+          "id": "opt-1-yes",
+          "color": "emerald",
+          "label": "SÍ, APRUEBO EL PRESUPUESTO"
+        },
+        {
+          "id": "opt-1-no",
+          "color": "rose",
+          "label": "NO APRUEBO EL PRESUPUESTO"
+        },
+        {
+          "id": "opt-1-abs",
+          "color": "slate",
+          "label": "ME ABSTENGO DE VOTAR"
+        }
+      ],
+      "isSecret": false,
+      "question": "¿Aprueba usted el Proyecto de Presupuesto Anual 2026-2027 presentado por la Administración y dictaminado por la Contaduría?",
+      "startedAt": "2026-08-28T18:40:00Z",
+      "assemblyId": "assembly-1",
+      "description": "Se somete a votación el presupuesto general de gastos ordinarios e inversión proyectado para el periodo Septiembre 2026 - Agosto 2027 por un valor total de $145.000.000 COP, con un incremento de cuota de administración del 7.2% correspondiente al IPC.",
+      "totalVoters": 10,
+      "allowAbstain": true,
+      "maxSelections": 1,
+      "minSelections": 1,
+      "showLiveResults": true,
+      "requiresCoefficient": true
+    },
+    {
+      "id": "vote-2",
+      "type": "candidate_election",
+      "title": "Elección de Miembros del Consejo de Administración 2026-2028",
+      "status": "active",
+      "options": [
+        {
+          "id": "opt-cand-1",
+          "label": "Elena Gómez Restrepo (Apto 101-B)",
+          "candidateId": "cand-1"
+        },
+        {
+          "id": "opt-cand-2",
+          "label": "Andrés Felipe Silva (Apto 204-A)",
+          "candidateId": "cand-2"
+        },
+        {
+          "id": "opt-cand-3",
+          "label": "Martha Cecilia Quintero (Apto 201-B)",
+          "candidateId": "cand-3"
+        },
+        {
+          "id": "opt-cand-4",
+          "label": "Roberto Domínguez Silva (Apto 501-A)",
+          "candidateId": "cand-4"
+        }
+      ],
+      "isSecret": true,
+      "question": "Seleccione hasta tres (3) candidatos para conformar el Consejo de Administración:",
+      "startedAt": "2026-08-28T18:50:00Z",
+      "assemblyId": "assembly-1",
+      "candidates": [
+        {
+          "id": "cand-1",
+          "name": "Elena Gómez Restrepo",
+          "status": "active",
+          "building": "Torre B",
+          "photoUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80",
+          "apartment": "Apto 101",
+          "proposals": "1. Plan preventivo de impermeabilizaciones y fachadas.\n2. Digitalización de la facturación y portería.\n3. Modernización de luminarias a tecnología LED solar en zonas comunes.",
+          "experience": "Ex-miembro del Consejo 2023, Líder del Comité de Convivencia.",
+          "profileSummary": "Ingeniera Civil con 15 años de experiencia en infraestructura y mantenimiento."
+        },
+        {
+          "id": "cand-2",
+          "name": "Andrés Felipe Silva",
+          "status": "active",
+          "building": "Torre A",
+          "photoUrl": "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80",
+          "apartment": "Apto 204",
+          "proposals": "1. Auditoría mensual de gastos comunes y cartera morosa.\n2. Fondo especial para renovación de ascensores sin cuotas extraordinarias gravosas.\n3. Negociación transparente de contratos de vigilancia.",
+          "experience": "10 años en gerencia financiera, copropietario desde 2019.",
+          "profileSummary": "Administrador de Empresas y especialista en finanzas corporativas."
+        },
+        {
+          "id": "cand-3",
+          "name": "Martha Cecilia Quintero",
+          "status": "active",
+          "building": "Torre B",
+          "photoUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80",
+          "apartment": "Apto 201",
+          "proposals": "1. Actualización y blindaje jurídico del Manual de Convivencia.\n2. Mediación efectiva de conflictos vecinales y tenencia responsable de mascotas.\n3. Cumplimiento estricto del Sistema de Gestión SST.",
+          "experience": "Asesora legal de copropiedades y actual Secretaria Ad-hoc.",
+          "profileSummary": "Abogada especialista en Derecho Inmobiliario y Propiedad Horizontal (Ley 675)."
+        },
+        {
+          "id": "cand-4",
+          "name": "Roberto Domínguez Silva",
+          "status": "active",
+          "building": "Torre A",
+          "photoUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80",
+          "apartment": "Apto 501",
+          "proposals": "1. Remodelación del parque infantil y zonas de esparcimiento familiar.\n2. Sistema de reciclaje eficiente y aprovechamiento de aguas lluvias.\n3. Adecuación de accesibilidad para personas mayores.",
+          "experience": "Diseñador de proyectos sostenibles, copropietario fundador.",
+          "profileSummary": "Arquitecto y docente universitario, enfocado en urbanismo y áreas verdes."
+        }
+      ],
+      "description": "Elección de los 3 miembros principales del Consejo de Administración para el periodo estatutario de dos años. Puede seleccionar hasta 3 candidatos.",
+      "totalVoters": 10,
+      "allowAbstain": true,
+      "maxSelections": 3,
+      "minSelections": 1,
+      "showLiveResults": true,
+      "requiresCoefficient": true
+    },
+    {
+      "id": "vote-3",
+      "type": "single_choice",
+      "title": "Selección de Empresa de Vigilancia y Seguridad Privada",
+      "status": "scheduled",
+      "options": [
+        {
+          "id": "opt-sec-a",
+          "label": "Propuesta A: Seguridad Superior Ltda. ($14.200.000/mes)",
+          "description": "Incluye 2 vigilantes 24/7 + botón de pánico + circuito cerrado de TV con 32 cámaras."
+        },
+        {
+          "id": "opt-sec-b",
+          "label": "Propuesta B: Alianza Vigilancia Total ($13.800.000/mes)",
+          "description": "Incluye 2 vigilantes 24/7 + rondas con patrulla motorizada + monitoreo perimetral."
+        },
+        {
+          "id": "opt-sec-c",
+          "label": "Propuesta C: Guardianes Residenciales SAS ($14.900.000/mes)",
+          "description": "Incluye 2 vigilantes armados 24/7 + sistema de detección por IA + póliza extendida."
+        }
+      ],
+      "isSecret": false,
+      "question": "¿Cuál empresa de seguridad considera más conveniente para el conjunto?",
+      "assemblyId": "assembly-1",
+      "description": "Evaluación de las 3 propuestas comerciales y técnicas presentadas para la prestación del servicio de seguridad 24/7 con control de acceso biométrico.",
+      "allowAbstain": true,
+      "maxSelections": 1,
+      "minSelections": 1,
+      "showLiveResults": true,
+      "requiresCoefficient": true
+    },
+    {
+      "id": "vote-1789086826283",
+      "type": "candidate_election",
+      "title": "Elección de Consejo de Administración 2026",
+      "status": "scheduled",
+      "options": [
+        {
+          "id": "opt-cand-1789086808104-p1y",
+          "label": "Eomaida Motato Largo (Apto 303) - Revisor Fiscal",
+          "candidateId": "cand-1789086808104-p1y",
+          "description": "Ejemplo"
+        },
+        {
+          "id": "opt-cand-1789086816779-jsq",
+          "label": "Vanesa Motato (Apto 401) - Revisor Fiscal",
+          "candidateId": "cand-1789086816779-jsq",
+          "description": "Candidato postulado para la representación en la asamblea."
+        },
+        {
+          "id": "opt-1789086830548-blank",
+          "label": "VOTO EN BLANCO",
+          "description": "Opción democrática formal para manifestar abstención de preferencia"
+        }
+      ],
+      "isSecret": true,
+      "question": "Seleccione los candidatos de su preferencia para conformar el Consejo de Administración:",
+      "assemblyId": "assembly-1789086530481",
+      "candidates": [
+        {
+          "id": "cand-1789086808104-p1y",
+          "name": "Eomaida Motato Largo",
+          "status": "active",
+          "building": "Torre F",
+          "photoUrl": "https://images.unsplash.com/photo-1534528741898?w=150&auto=format&fit=crop&q=80",
+          "apartment": "Apto 303",
+          "proposals": "Ejemplo",
+          "documentNumber": "30.382.944",
+          "profileSummary": "Ejemplo",
+          "rolePostulation": "Revisor Fiscal"
+        },
+        {
+          "id": "cand-1789086816779-jsq",
+          "name": "Vanesa Motato",
+          "status": "active",
+          "building": "Torre A",
+          "photoUrl": "https://images.unsplash.com/photo-1534528742517?w=150&auto=format&fit=crop&q=80",
+          "apartment": "Apto 401",
+          "proposals": "Cumplimiento del reglamento de propiedad horizontal y optimización de recursos.",
+          "documentNumber": "1.098.765.432",
+          "profileSummary": "Candidato postulado para la representación en la asamblea.",
+          "rolePostulation": "Revisor Fiscal"
+        }
+      ],
+      "totalVoters": 0,
+      "allowAbstain": true,
+      "filterConfig": {
+        "filterType": "by_tower",
+        "councilOnly": false,
+        "allowedTowers": [
+          "Torre B"
+        ],
+        "targetAudience": "specific_towers",
+        "allowedOwnerIds": []
+      },
+      "maxSelections": 1,
+      "minSelections": 1,
+      "showLiveResults": true,
+      "eligibleVotersCount": 0,
+      "requiresCoefficient": true
+    },
+    {
+      "id": "vote-1789087951863",
+      "type": "candidate_election",
+      "title": "Elección de Consejo de Administración 2026",
+      "status": "scheduled",
+      "options": [
+        {
+          "id": "opt-cand-1789087940834-epz",
+          "label": "Eomaida Motato Largo (Apto 303) - Consejo de Administración (Principal)",
+          "candidateId": "cand-1789087940834-epz",
+          "description": "Candidato postulado para la representación en la asamblea."
+        },
+        {
+          "id": "opt-cand-1789087951600-5j2",
+          "label": "Eomaida Motato Largo (Apto 303) - Consejo de Administración (Principal)",
+          "candidateId": "cand-1789087951600-5j2",
+          "description": "Candidato postulado para la representación en la asamblea."
+        },
+        {
+          "id": "opt-1789087956026-blank",
+          "label": "VOTO EN BLANCO",
+          "description": "Opción democrática formal para manifestar abstención de preferencia"
+        }
+      ],
+      "isSecret": true,
+      "question": "Seleccione los candidatos de su preferencia para conformar el Consejo de Administración:",
+      "assemblyId": "assembly-1",
+      "candidates": [
+        {
+          "id": "cand-1789087940834-epz",
+          "name": "Eomaida Motato Largo",
+          "status": "active",
+          "building": "Torre F",
+          "photoUrl": "https://images.unsplash.com/photo-1534528742475?w=150&auto=format&fit=crop&q=80",
+          "apartment": "Apto 303",
+          "proposals": "Cumplimiento del reglamento de propiedad horizontal y optimización de recursos.",
+          "documentNumber": "30.382.944",
+          "profileSummary": "Candidato postulado para la representación en la asamblea.",
+          "rolePostulation": "Consejo de Administración (Principal)"
+        },
+        {
+          "id": "cand-1789087951600-5j2",
+          "name": "Eomaida Motato Largo",
+          "status": "active",
+          "building": "Torre F",
+          "photoUrl": "https://images.unsplash.com/photo-1534528741977?w=150&auto=format&fit=crop&q=80",
+          "apartment": "Apto 303",
+          "proposals": "Cumplimiento del reglamento de propiedad horizontal y optimización de recursos.",
+          "documentNumber": "30.382.944",
+          "profileSummary": "Candidato postulado para la representación en la asamblea.",
+          "rolePostulation": "Consejo de Administración (Principal)"
+        }
+      ],
+      "totalVoters": 9,
+      "allowAbstain": true,
+      "filterConfig": {
+        "filterType": "by_tower",
+        "councilOnly": false,
+        "allowedTowers": [
+          "Torre A"
+        ],
+        "targetAudience": "specific_towers",
+        "allowedOwnerIds": []
+      },
+      "maxSelections": 1,
+      "minSelections": 1,
+      "showLiveResults": true,
+      "eligibleVotersCount": 9,
+      "requiresCoefficient": true
+    }
+  ],
+  "voteRecords": [
+    {
+      "id": "vrec-1",
+      "voteId": "vote-1",
+      "timestamp": "2026-08-28T18:42:15Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Apto 101",
+      "verificationCode": "VREC-77A9B-101",
+      "voterCoefficient": 8.2,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-2",
+      "voteId": "vote-1",
+      "timestamp": "2026-08-28T18:43:00Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Apto 501",
+      "verificationCode": "VREC-44C1D-501",
+      "voterCoefficient": 6.95,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-3",
+      "voteId": "vote-1",
+      "timestamp": "2026-08-28T18:43:40Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Apto 402",
+      "verificationCode": "VREC-99E8F-402",
+      "voterCoefficient": 7.5,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-4",
+      "voteId": "vote-1",
+      "timestamp": "2026-08-28T18:44:10Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Apto 204",
+      "verificationCode": "VREC-33X2Y-204",
+      "voterCoefficient": 7.1,
+      "selectedOptionIds": [
+        "opt-1-no"
+      ]
+    },
+    {
+      "id": "vrec-5",
+      "voteId": "vote-1",
+      "timestamp": "2026-08-28T18:45:00Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Apto 502",
+      "verificationCode": "VREC-11K0L-502",
+      "voterCoefficient": 7.45,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-6",
+      "voteId": "vote-1",
+      "timestamp": "2026-08-28T18:45:30Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Apto 102",
+      "verificationCode": "VREC-88Z7W-102",
+      "voterCoefficient": 8.5,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-1788549674877-7su",
+      "voteId": "vote-1",
+      "timestamp": "2026-09-04T19:21:14.877Z",
+      "assemblyId": "assembly-1",
+      "voterUserId": "user-owner-1788548545294-7h2mo",
+      "voterApartment": "303",
+      "verificationCode": "VER-K01OSE-4877",
+      "voterCoefficient": 1.25,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-1788552625770-qma",
+      "voteId": "vote-1",
+      "timestamp": "2026-09-04T20:10:25.770Z",
+      "assemblyId": "assembly-1",
+      "voterUserId": "user-owner-vanesa",
+      "voterApartment": "Apto 401",
+      "verificationCode": "VER-ZVK0QT-5770",
+      "voterCoefficient": 8.5,
+      "selectedOptionIds": [
+        "opt-1-yes"
+      ]
+    },
+    {
+      "id": "vrec-1788552638505-ms3",
+      "voteId": "vote-2",
+      "timestamp": "2026-09-04T20:10:38.505Z",
+      "assemblyId": "assembly-1",
+      "voterApartment": "Anónimo (P.H.)",
+      "verificationCode": "VER-D0W08Q-8505",
+      "voterCoefficient": 8.5,
+      "selectedOptionIds": [
+        "opt-cand-2"
+      ]
+    }
+  ],
+  "participations": [
+    {
+      "id": "part-1",
+      "voteId": "vote-1",
+      "votedAt": "2026-08-28T18:42:15Z",
+      "voterName": "Elena Gómez Restrepo",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-VT1-EG101-992",
+      "voterUserId": "user-owner-2",
+      "voterDocument": "41.905.432",
+      "voterApartment": "Apto 101",
+      "voterCoefficient": 8.2
+    },
+    {
+      "id": "part-2",
+      "voteId": "vote-1",
+      "votedAt": "2026-08-28T18:43:00Z",
+      "voterName": "Roberto Domínguez Silva",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-VT1-RD501-441",
+      "voterUserId": "user-owner-3",
+      "voterDocument": "19.876.543",
+      "voterApartment": "Apto 501",
+      "voterCoefficient": 6.95
+    },
+    {
+      "id": "part-3",
+      "voteId": "vote-1",
+      "votedAt": "2026-08-28T18:43:40Z",
+      "voterName": "Gloria Patricia Ángel",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-VT1-GA402-778",
+      "voterUserId": "owner-4",
+      "voterDocument": "51.990.234",
+      "voterApartment": "Apto 402",
+      "voterCoefficient": 7.5
+    },
+    {
+      "id": "part-4",
+      "voteId": "vote-1",
+      "votedAt": "2026-08-28T18:44:10Z",
+      "voterName": "Andrés Felipe Silva",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-VT1-AS204-125",
+      "voterUserId": "owner-5",
+      "voterDocument": "80.450.910",
+      "voterApartment": "Apto 204",
+      "voterCoefficient": 7.1
+    },
+    {
+      "id": "part-5",
+      "voteId": "vote-1",
+      "votedAt": "2026-08-28T18:45:00Z",
+      "voterName": "Dr. Gustavo Petro Ortiz",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-VT1-GP502-330",
+      "voterUserId": "user-president",
+      "voterDocument": "19.450.880",
+      "voterApartment": "Apto 502",
+      "voterCoefficient": 7.45
+    },
+    {
+      "id": "part-6",
+      "voteId": "vote-1",
+      "votedAt": "2026-08-28T18:45:30Z",
+      "voterName": "Inversiones Los Sauces (Apoderado)",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-VT1-LS102-887",
+      "voterUserId": "owner-8",
+      "voterDocument": "901.234.567-8",
+      "voterApartment": "Apto 102",
+      "voterCoefficient": 8.5
+    },
+    {
+      "id": "part-1788549674877-lgt",
+      "voteId": "vote-1",
+      "votedAt": "2026-09-04T19:21:14.877Z",
+      "voterName": "Eomaida Motato Largo",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-TE-1-303-K01OSE",
+      "voterUserId": "user-owner-1788548545294-7h2mo",
+      "voterDocument": "30.382.944",
+      "voterApartment": "303",
+      "voterCoefficient": 1.25
+    },
+    {
+      "id": "part-1788552625770-2an",
+      "voteId": "vote-1",
+      "votedAt": "2026-09-04T20:10:25.770Z",
+      "voterName": "Vanesa Motato",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-TE-1-Apto401-ZVK0QT",
+      "voterUserId": "user-owner-vanesa",
+      "voterDocument": "1.098.765.432",
+      "voterApartment": "Apto 401",
+      "voterCoefficient": 8.5
+    },
+    {
+      "id": "part-1788552638505-89v",
+      "voteId": "vote-2",
+      "votedAt": "2026-09-04T20:10:38.505Z",
+      "voterName": "Vanesa Motato",
+      "assemblyId": "assembly-1",
+      "receiptCode": "REC-TE-2-Apto401-D0W08Q",
+      "voterUserId": "user-owner-vanesa",
+      "voterDocument": "1.098.765.432",
+      "voterApartment": "Apto 401",
+      "voterCoefficient": 8.5
+    }
+  ],
+  "notes": [
+    {
+      "id": "note-1",
+      "content": "Se da inicio a la asamblea siendo las 18:15 horas. Se verificó el quórum deliberatorio y decisorio con el 75.75% del coeficiente total del conjunto, superando el 50.01% requerido por la Ley 675 de 2001.",
+      "category": "general",
+      "timestamp": "2026-08-28T18:16:00Z",
+      "assemblyId": "assembly-1",
+      "authorName": "Martha Cecilia Quintero",
+      "authorRole": "Secretaria Ad-hoc"
+    },
+    {
+      "id": "note-2",
+      "content": "El C.P. Fernando Valdés presenta el informe de estados financieros y aclara la destinación del fondo de imprevistos para mantenimiento locativo de bombas de agua.",
+      "category": "aclaracion",
+      "timestamp": "2026-08-28T18:35:00Z",
+      "assemblyId": "assembly-1",
+      "authorName": "Carolina Méndez Rojas",
+      "authorRole": "Administradora"
+    },
+    {
+      "id": "note-3",
+      "content": "El propietario del Apto 302 (Carlos Ruiz) solicita que el incremento de administración se revise en función de las obras prioritarias de fachada.",
+      "category": "intervencion",
+      "timestamp": "2026-08-28T18:38:00Z",
+      "assemblyId": "assembly-1",
+      "authorName": "Dr. Gustavo Petro Ortiz",
+      "authorRole": "Presidente de Asamblea"
+    }
+  ],
+  "minutes": [
+    {
+      "id": "minutes-1",
+      "title": "Acta No. 35 - Asamblea General Ordinaria de Copropietarios 2026",
+      "status": "draft",
+      "summary": "Se desarrolló el orden del día con quórum verificado del 75.75%. Se sustentaron los estados financieros 2025 y se presentó el proyecto de presupuesto para el nuevo periodo. Se procedió a las votaciones digitales reglamentarias mediante la plataforma VotoSmart.",
+      "version": 1,
+      "introText": "En la ciudad de Bogotá D.C., siendo las 18:15 horas del día 28 de agosto de 2026, previa convocatoria enviada por la administración el día 10 de agosto de 2026 de conformidad con los estatutos del Conjunto Residencial Torres del Parque P.H. y la Ley 675 de 2001, se reunieron los copropietarios en modalidad mixta.",
+      "assemblyId": "assembly-1",
+      "signatures": [
+        {
+          "name": "Dr. Gustavo Petro Ortiz",
+          "role": "Presidente de Asamblea",
+          "document": "CC 19.450.880"
+        },
+        {
+          "name": "Martha Cecilia Quintero",
+          "role": "Secretaria Ad-hoc",
+          "document": "CC 39.870.123"
+        },
+        {
+          "name": "Carolina Méndez Rojas",
+          "role": "Administradora",
+          "document": "CC 52.987.123"
+        }
+      ],
+      "conclusions": "Se faculta a la Administración para protocolizar el presupuesto aprobado y coordinar el empalme con el nuevo Consejo de Administración electo.",
+      "generatedAt": "2026-08-28T18:55:00Z",
+      "generatedBy": "Carolina Méndez Rojas",
+      "observations": "La asamblea transcurrió en completa normalidad y cordialidad, garantizando la trazabilidad y voto secreto de los asistentes.",
+      "votingSummary": "1. Presupuesto 2026-2027: Aprobado mayoritariamente.\n2. Elección Consejo de Administración: Proceso digital secreto en curso con participación activa de la asamblea."
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "audit-1789394425022-1r7",
+      "action": "ACTUALIZACION_PROPIETARIO",
+      "userId": "user-admin",
+      "details": "Edición de datos del copropietario Vanesa Motato (Torre A - Apto 401)",
+      "userName": "Administración",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-14T14:00:25.022Z"
+    },
+    {
+      "id": "audit-1789155099399-zkk",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-vanesa",
+      "details": "Ingreso exitoso con cédula 1.098.765.432 y código OTP verificado.",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T19:31:39.399Z"
+    },
+    {
+      "id": "audit-1789155099399-wlj",
+      "action": "CONTROL_QUORUM",
+      "userId": "user-admin",
+      "details": "Registro de ingreso de Vanesa Motato (Apto 401). Quórum actual: 8.50%",
+      "userName": "Ingreso Virtual OTP",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T19:31:39.399Z"
+    },
+    {
+      "id": "audit-1789155058967-22y",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T19:30:58.967Z"
+    },
+    {
+      "id": "audit-1789134285064-27u",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-vanesa",
+      "details": "Ingreso exitoso con cédula 1.098.765.432 y código OTP verificado.",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:44:45.064Z"
+    },
+    {
+      "id": "audit-1789134285064-gwv",
+      "action": "CONTROL_QUORUM",
+      "userId": "user-admin",
+      "details": "Registro de ingreso de Vanesa Motato (Apto 401). Quórum actual: 8.50%",
+      "userName": "Ingreso Virtual OTP",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:44:45.064Z"
+    },
+    {
+      "id": "audit-1789134156918-rj3",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:42:36.918Z"
+    },
+    {
+      "id": "audit-1789132267603-9qn",
+      "action": "CAMBIO_CONTRASENA_PERFIL",
+      "userId": "user-admin",
+      "details": "Cambio exitoso de contraseña para Vanesa Alexandra Acevedo (motatovanesa@gmail.com)",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:11:07.603Z"
+    },
+    {
+      "id": "audit-1789132227916-5mn",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:10:27.916Z"
+    },
+    {
+      "id": "audit-1789132074536-tbl",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:07:54.536Z"
+    },
+    {
+      "id": "audit-1789132065407-fst",
+      "action": "CAMBIO_CONTRASEÑA",
+      "userId": "user-admin",
+      "details": "Restablecimiento exitoso de contraseña para admin@votosmart.app",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T13:07:45.407Z"
+    },
+    {
+      "id": "audit-1789090218661-fma",
+      "action": "ESTADO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Cambio de estado en asamblea a scheduled",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T01:30:18.661Z"
+    },
+    {
+      "id": "audit-1789090185500-ed6",
+      "action": "CREACIÓN_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Creación de Asamblea Extraordinaria de Propietarios - Fachadas y Seguridad 2026 en Conjunto Residencial Torres del Parque P.H.",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T01:29:45.500Z"
+    },
+    {
+      "id": "audit-1789090040234-wui",
+      "action": "ESTADO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Cambio de estado en asamblea a in_progress",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T01:27:20.234Z"
+    },
+    {
+      "id": "audit-1789089827390-4gz",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T01:23:47.390Z"
+    },
+    {
+      "id": "audit-1789088173352-akn",
+      "action": "ESTADO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Cambio de estado en asamblea a in_progress",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:56:13.352Z"
+    },
+    {
+      "id": "audit-1789088147084-oze",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:55:47.084Z"
+    },
+    {
+      "id": "audit-1789088123390-hkv",
+      "action": "CAMBIO_CONTRASENA_PERFIL",
+      "userId": "user-admin",
+      "details": "Cambio exitoso de contraseña para Vanesa Alexandra Acevedo (motatovanesa@gmail.com)",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:55:23.390Z"
+    },
+    {
+      "id": "audit-1789088107624-7z3",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:55:07.624Z"
+    },
+    {
+      "id": "audit-1789088086437-wak",
+      "action": "CAMBIO_CONTRASENA_PERFIL",
+      "userId": "user-admin",
+      "details": "Cambio exitoso de contraseña para Vanesa Alexandra Acevedo (motatovanesa@gmail.com)",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:54:46.437Z"
+    },
+    {
+      "id": "audit-1789088066634-5xk",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:54:26.634Z"
+    },
+    {
+      "id": "audit-1789088028075-00e",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-vanesa",
+      "details": "Ingreso exitoso con cédula 1.098.765.432 y código OTP verificado.",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:53:48.075Z"
+    },
+    {
+      "id": "audit-1789087963365-i59",
+      "action": "ESTADO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Cambio de estado en asamblea a in_progress",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:52:43.365Z"
+    },
+    {
+      "id": "audit-1789087951863-8wi",
+      "action": "CREACIÓN_VOTACIÓN",
+      "userId": "user-admin",
+      "details": "Creación de votación: \"Elección de Consejo de Administración 2026\" (candidate_election, Filtro: by_tower, Habilitados: 9)",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:52:31.863Z"
+    },
+    {
+      "id": "audit-1789087797897-1b5",
+      "action": "CAMBIO_CONTRASENA_PERFIL",
+      "userId": "user-admin",
+      "details": "Cambio exitoso de contraseña para Vanesa Alexandra Acevedo (motatovanesa@gmail.com)",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:49:57.897Z"
+    },
+    {
+      "id": "audit-1789087767011-hb5",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:49:27.011Z"
+    },
+    {
+      "id": "audit-1789086826283-g0p",
+      "action": "CREACIÓN_VOTACIÓN",
+      "userId": "user-admin",
+      "details": "Creación de votación: \"Elección de Consejo de Administración 2026\" (candidate_election, Filtro: by_tower, Habilitados: 0)",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:33:46.283Z"
+    },
+    {
+      "id": "audit-1789086785471-iwi",
+      "action": "CAMBIO_CONJUNTO",
+      "userId": "user-admin",
+      "details": "Cambio de conjunto activo a: Conjunto Residencial Torres del Parque P.H.",
+      "userName": "Administrador",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:33:05.471Z"
+    },
+    {
+      "id": "audit-1789086669628-o3b",
+      "action": "ESTADO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Cambio de estado en asamblea a scheduled",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:31:09.628Z"
+    },
+    {
+      "id": "audit-1789086639596-7pm",
+      "action": "ESTADO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Cambio de estado en asamblea a scheduled",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:30:39.596Z"
+    },
+    {
+      "id": "audit-1789086530482-6ec",
+      "action": "CREACIÓN_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Creación de Asamblea Extraordinaria de Propietarios - Fachadas y Seguridad 2026 en Condominio Campestre Los Robles",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:28:50.482Z"
+    },
+    {
+      "id": "audit-1789086463052-lku",
+      "action": "CAMBIO_CONJUNTO",
+      "userId": "user-admin",
+      "details": "Cambio de conjunto activo a: Condominio Campestre Los Robles",
+      "userName": "Administrador",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:27:43.052Z"
+    },
+    {
+      "id": "audit-1789086458258-tx1",
+      "action": "CAMBIO_CONJUNTO",
+      "userId": "user-admin",
+      "details": "Cambio de conjunto activo a: Residencial Altos de la Colina P.H.",
+      "userName": "Administrador",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:27:38.258Z"
+    },
+    {
+      "id": "audit-1789086433773-6op",
+      "action": "CAMBIO_CONJUNTO",
+      "userId": "user-admin",
+      "details": "Cambio de conjunto activo a: Conjunto Residencial Torres del Parque P.H.",
+      "userName": "Administrador",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:27:13.773Z"
+    },
+    {
+      "id": "audit-1789086405177-i3d",
+      "action": "CAMBIO_CONJUNTO",
+      "userId": "user-admin",
+      "details": "Cambio de conjunto activo a: Residencial Altos de la Colina P.H.",
+      "userName": "Administrador",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:26:45.177Z"
+    },
+    {
+      "id": "audit-1789086389784-sil",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "complexId": "complex-1",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-11T00:26:29.784Z"
+    },
+    {
+      "id": "audit-1788567902459-s5p",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-vanesa",
+      "details": "Ingreso exitoso con cédula 1.098.765.432 y código OTP verificado.",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:25:02.459Z"
+    },
+    {
+      "id": "audit-1788567856730-628",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:24:16.730Z"
+    },
+    {
+      "id": "audit-1788567836062-55d",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:23:56.062Z"
+    },
+    {
+      "id": "audit-1788567828467-hvb",
+      "action": "CAMBIO_CONTRASEÑA",
+      "userId": "user-admin",
+      "details": "Restablecimiento exitoso de contraseña para motatovanesa@gmail.com",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:23:48.467Z"
+    },
+    {
+      "id": "audit-1788567748814-0qt",
+      "action": "ACTUALIZACION_PERFIL",
+      "userId": "user-admin",
+      "details": "Actualización de información personal de perfil para Vanesa Alexandra Acevedo",
+      "userName": "Vanesa Alexandra Acevedo",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:22:28.814Z"
+    },
+    {
+      "id": "audit-1788567712472-sxe",
+      "action": "ACTUALIZACION_PROPIETARIO",
+      "userId": "user-admin",
+      "details": "Edición de datos del copropietario Eomaida Motato Largo (Torre F - Apto 303)",
+      "userName": "Administración",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:21:52.472Z"
+    },
+    {
+      "id": "audit-1788567699299-5xx",
+      "action": "ELIMINACION_MASIVA_PROPIETARIOS",
+      "userId": "user-admin",
+      "details": "Eliminación masiva de 16 copropietarios del censo",
+      "userName": "Administración",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:21:39.299Z"
+    },
+    {
+      "id": "audit-1788567654282-25u",
+      "action": "ACTUALIZACION_PROPIETARIO",
+      "userId": "user-admin",
+      "details": "Edición de datos del copropietario Vanesa Motato (Torre A - Apto 401)",
+      "userName": "Administración",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:20:54.282Z"
+    },
+    {
+      "id": "audit-1788567577669-i0c",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-05T00:19:37.669Z"
+    },
+    {
+      "id": "audit-1788553829762-h0s",
+      "action": "REGISTRO_USUARIO",
+      "userId": "user-1788553829762",
+      "details": "Nuevo copropietario registrado en la plataforma: Profesor UCentral (Apto 305)",
+      "userName": "Profesor UCentral",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T20:30:29.762Z"
+    },
+    {
+      "id": "audit-1788552638505-gi8",
+      "action": "VOTO_REGISTRADO",
+      "userId": "user-owner-vanesa",
+      "details": "Voto registrado en \"Elección de Miembros del Consejo de Administración 2026-2028\" (Comprobante: REC-TE-2-Apto401-D0W08Q)",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T20:10:38.505Z"
+    },
+    {
+      "id": "audit-1788552625770-n5z",
+      "action": "VOTO_REGISTRADO",
+      "userId": "user-owner-vanesa",
+      "details": "Voto registrado en \"Aprobación del Presupuesto Ordinario 2026-2027\" (Comprobante: REC-TE-1-Apto401-ZVK0QT)",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T20:10:25.770Z"
+    },
+    {
+      "id": "audit-1788552606395-8iw",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-vanesa",
+      "details": "Ingreso exitoso con cédula 1.098.765.432 y código OTP verificado.",
+      "userName": "Vanesa Motato",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T20:10:06.395Z"
+    },
+    {
+      "id": "audit-1788549674877-ckr",
+      "action": "VOTO_REGISTRADO",
+      "userId": "user-owner-1788548545294-7h2mo",
+      "details": "Voto registrado en \"Aprobación del Presupuesto Ordinario 2026-2027\" (Comprobante: REC-TE-1-303-K01OSE)",
+      "userName": "Eomaida Motato Largo",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T19:21:14.877Z"
+    },
+    {
+      "id": "audit-1788549663980-elr",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-1788548545294-7h2mo",
+      "details": "Ingreso exitoso con cédula 30.382.944 y código OTP verificado.",
+      "userName": "Eomaida Motato Largo",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T19:21:03.980Z"
+    },
+    {
+      "id": "audit-1788548951634-7di",
+      "action": "INGRESO_VOTANTE_OTP",
+      "userId": "user-owner-1",
+      "details": "Ingreso exitoso con cédula 79.845.612 y código OTP verificado.",
+      "userName": "Carlos Arturo Ruiz",
+      "userRole": "owner",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T19:09:11.634Z"
+    },
+    {
+      "id": "audit-1788548951634-jid",
+      "action": "CONTROL_QUORUM",
+      "userId": "user-admin",
+      "details": "Registro de ingreso de Carlos Arturo Ruiz (Apto 302). Quórum actual: 74.90%",
+      "userName": "Ingreso Virtual OTP",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T19:09:11.634Z"
+    },
+    {
+      "id": "audit-1788548545294-io5",
+      "action": "REGISTRO_PROPIETARIO",
+      "userId": "user-admin",
+      "details": "Registro de propietario Eomaida Motato Largo (303)",
+      "userName": "Carolina Méndez",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T19:02:25.294Z"
+    },
+    {
+      "id": "audit-1788548482342-cz7",
+      "action": "INICIO_SESION",
+      "userId": "user-admin",
+      "details": "Inicio de sesión exitoso como admin",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-09-04T19:01:22.342Z"
+    },
+    {
+      "id": "audit-1",
+      "action": "CREACIÓN_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Creación de Asamblea Ordinaria 2026-2027 con fecha 28/08/2026",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-08-10T10:00:00Z",
+      "assemblyId": "assembly-1"
+    },
+    {
+      "id": "audit-2",
+      "action": "CARGA_DOCUMENTOS",
+      "userId": "user-admin",
+      "details": "Carga de Convocatoria Oficial y Estados Financieros",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-08-10T14:35:00Z",
+      "assemblyId": "assembly-1"
+    },
+    {
+      "id": "audit-3",
+      "action": "INICIO_ASAMBLEA",
+      "userId": "user-admin",
+      "details": "Apertura oficial de la asamblea con quórum del 75.75%",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-08-28T18:15:00Z",
+      "assemblyId": "assembly-1"
+    },
+    {
+      "id": "audit-4",
+      "action": "APERTURA_VOTACIÓN",
+      "userId": "user-admin",
+      "details": "Apertura de votación: Aprobación del Presupuesto Ordinario 2026-2027",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-08-28T18:40:00Z",
+      "assemblyId": "assembly-1"
+    },
+    {
+      "id": "audit-5",
+      "action": "APERTURA_ELECCIÓN",
+      "userId": "user-admin",
+      "details": "Apertura de elección: Elección de Miembros del Consejo de Administración 2026-2028",
+      "userName": "Carolina Méndez Rojas",
+      "userRole": "admin",
+      "ipAddress": "190.25.112.44",
+      "timestamp": "2026-08-28T18:50:00Z",
+      "assemblyId": "assembly-1"
+    }
+  ],
+  "emailLogs": [
+    {
+      "id": "email-1789132052456",
+      "type": "password_reset",
+      "sentAt": "2026-09-11T13:07:32.456Z",
+      "status": "sent",
+      "subject": "Código de Recuperación de Contraseña VotoSmart: 926727",
+      "assemblyId": "assembly-1789090185500",
+      "recipientName": "Carolina Méndez Rojas",
+      "recipientEmail": "admin@votosmart.app"
+    },
+    {
+      "id": "email-voter-otp-1789088002017",
+      "type": "invitacion",
+      "sentAt": "2026-09-11T00:53:22.017Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 155695",
+      "assemblyId": "assembly-1789086530481",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "vanesaacevedo026@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788567884980",
+      "type": "invitacion",
+      "sentAt": "2026-09-05T00:24:44.980Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 706977",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "vanesaacevedo026@gmail.com"
+    },
+    {
+      "id": "email-1788567805854",
+      "type": "password_reset",
+      "sentAt": "2026-09-05T00:23:25.854Z",
+      "status": "sent",
+      "subject": "Código de Recuperación de Contraseña VotoSmart: 537154",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Alexandra Acevedo",
+      "recipientEmail": "motatovanesa@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788552588938",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T20:09:48.938Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 359187",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "motatovanesa@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788552465239",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T20:07:45.239Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 794224",
+      "assemblyId": "assembly-1",
+      "recipientName": "Fernando Gómez Vargas",
+      "recipientEmail": "fernando.gomez@outlook.com"
+    },
+    {
+      "id": "email-voter-otp-1788552464707",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T20:07:44.707Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 107163",
+      "assemblyId": "assembly-1",
+      "recipientName": "Elena Gómez Restrepo",
+      "recipientEmail": "elena.gomez@hotmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788552464057",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T20:07:44.056Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 170961",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "motatovanesa@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788549641544",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:20:41.544Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 737402",
+      "assemblyId": "assembly-1",
+      "recipientName": "Eomaida Motato Largo",
+      "recipientEmail": "omairamotato28@gmail.com"
+    },
+    {
+      "id": "email-1788549536336",
+      "type": "password_reset",
+      "sentAt": "2026-09-04T19:18:56.336Z",
+      "status": "sent",
+      "subject": "Código de Recuperación de Contraseña VotoSmart: 374823",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "motatovanesa@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788549535759",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:18:55.759Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 976793",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "motatovanesa@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788549535168",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:18:55.168Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 548622",
+      "assemblyId": "assembly-1",
+      "recipientName": "Vanesa Motato",
+      "recipientEmail": "motatovanesa@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788549451018",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:17:31.018Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 591313",
+      "assemblyId": "assembly-1",
+      "recipientName": "Carlos Arturo Ruiz",
+      "recipientEmail": "carlos.ruiz@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788549197277",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:13:17.277Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 945101",
+      "assemblyId": "assembly-1",
+      "recipientName": "Eomaida Motato Largo",
+      "recipientEmail": "omairamotato28@gmail.com"
+    },
+    {
+      "id": "email-1788548951638",
+      "type": "password_reset",
+      "sentAt": "2026-09-04T19:09:11.638Z",
+      "status": "sent",
+      "subject": "Código de Recuperación de Contraseña VotoSmart: 349985",
+      "assemblyId": "assembly-1",
+      "recipientName": "Carolina Méndez Rojas",
+      "recipientEmail": "admin@torresdelparque.com"
+    },
+    {
+      "id": "email-voter-otp-1788548951498",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:09:11.498Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 267645",
+      "assemblyId": "assembly-1",
+      "recipientName": "Carlos Arturo Ruiz",
+      "recipientEmail": "carlos.ruiz@gmail.com"
+    },
+    {
+      "id": "email-voter-otp-1788548562448",
+      "type": "invitacion",
+      "sentAt": "2026-09-04T19:02:42.448Z",
+      "status": "sent",
+      "subject": "Código de Acceso a Votación VotoSmart: 306231",
+      "assemblyId": "assembly-1",
+      "recipientName": "Eomaida Motato Largo",
+      "recipientEmail": "omairamotato28@gmail.com"
+    },
+    {
+      "id": "email-1",
+      "type": "invitacion",
+      "sentAt": "2026-08-10T15:00:00Z",
+      "status": "sent",
+      "subject": "Convocatoria Oficial: Asamblea General Ordinaria 2026 - Torres del Parque",
+      "assemblyId": "assembly-1",
+      "recipientName": "Carlos Arturo Ruiz",
+      "recipientEmail": "carlos.ruiz@gmail.com"
+    },
+    {
+      "id": "email-2",
+      "type": "invitacion",
+      "sentAt": "2026-08-10T15:00:00Z",
+      "status": "sent",
+      "subject": "Convocatoria Oficial: Asamblea General Ordinaria 2026 - Torres del Parque",
+      "assemblyId": "assembly-1",
+      "recipientName": "Elena Gómez Restrepo",
+      "recipientEmail": "elena.gomez@hotmail.com"
+    },
+    {
+      "id": "email-3",
+      "type": "invitacion",
+      "sentAt": "2026-08-10T15:00:00Z",
+      "status": "sent",
+      "subject": "Convocatoria Oficial: Asamblea General Ordinaria 2026 - Torres del Parque",
+      "assemblyId": "assembly-1",
+      "recipientName": "Roberto Domínguez Silva",
+      "recipientEmail": "roberto.dominguez@yahoo.es"
+    }
+  ],
+  "resetRequests": [
+    {
+      "email": "motatovanesa@gmail.com",
+      "documentNumber": "1.098.765.432",
+      "code": "591461",
+      "createdAt": 1789568835667,
+      "expiresAt": 1789569735667,
+      "used": false,
+      "verified": false
+    }
+  ],
+  "userPasswords": [
+    [
+      "administracion@torresdelparque.com",
+      "admin123"
+    ],
+    [
+      "admin@torresdelparque.com",
+      "admin123"
+    ],
+    [
+      "admin@ejemplo.com",
+      "admin123"
+    ],
+    [
+      "presidente@torresdelparque.com",
+      "admin123"
+    ],
+    [
+      "contador@torresdelparque.com",
+      "admin123"
+    ],
+    [
+      "superadmin@votosmart.app",
+      "admin123"
+    ],
+    [
+      "superadmin@plataforma.com",
+      "admin123"
+    ],
+    [
+      "profesor@ucentral.edu.co",
+      "admin123"
+    ],
+    [
+      "motatovanesa@gmail.com",
+      "Linyani2*"
+    ],
+    [
+      "admin@votosmart.app",
+      "Admin2025*"
+    ]
+  ]
+}
