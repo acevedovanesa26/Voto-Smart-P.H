@@ -174,3 +174,47 @@ export async function saveStateNow(): Promise<boolean> {
     return false;
   }
 }
+
+export async function loadEmailConfigFromDb(): Promise<any | null> {
+  try {
+    if (pool && isConnected) {
+      const res = await pool.query(`SELECT data FROM app_state WHERE key = 'votosmart_email_config' LIMIT 1;`);
+      if (res.rows.length > 0 && res.rows[0].data) {
+        return res.rows[0].data;
+      }
+    } else {
+      const disk = loadFromDisk();
+      if (disk && disk._email_config) {
+        return disk._email_config;
+      }
+    }
+  } catch (err: any) {
+    console.warn('[Database] Advertencia al leer config de email desde BD:', err.message);
+  }
+  return null;
+}
+
+export async function saveEmailConfigToDb(config: any): Promise<boolean> {
+  try {
+    const disk = loadFromDisk() || {};
+    disk._email_config = config;
+    saveToDisk(disk);
+
+    if (pool && isConnected) {
+      await pool.query(
+        `
+        INSERT INTO app_state (key, data, updated_at)
+        VALUES ('votosmart_email_config', $1, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE
+        SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP;
+        `,
+        [JSON.stringify(config)]
+      );
+      return true;
+    }
+  } catch (err: any) {
+    console.error('[Database] Error guardando config de email en PostgreSQL:', err.message);
+  }
+  return false;
+}
+

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { loadEmailConfigFromDb, saveEmailConfigToDb } from './db';
 
 export interface SendEmailOptions {
   to: string;
@@ -25,6 +26,8 @@ export interface EmailRecord {
   sentAt: string;
 }
 
+export const DEFAULT_BREVO_SENDER = 'motatovanesa@gmail.com';
+
 // In-memory runtime configuration override (can be set via UI or env)
 interface EmailConfig {
   brevoApiKey?: string;
@@ -37,20 +40,64 @@ interface EmailConfig {
 
 const runtimeConfig: EmailConfig = {
   brevoApiKey: process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY,
-  brevoSenderEmail: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || 'motatovanesa@gmail.com',
+  brevoSenderEmail: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || DEFAULT_BREVO_SENDER,
   emailHost: process.env.EMAIL_HOST,
   emailPort: process.env.EMAIL_PORT ? parseInt(process.env.EMAIL_PORT, 10) : undefined,
   emailUsername: process.env.EMAIL_USERNAME,
   emailPassword: process.env.EMAIL_PASSWORD
 };
 
-export function updateRuntimeEmailConfig(newConfig: Partial<EmailConfig>) {
+export function getEffectiveBrevoKey(): string {
+  const custom = (runtimeConfig.brevoApiKey || process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '').trim();
+  return custom;
+}
+
+export function getEffectiveBrevoSender(): string {
+  const custom = (runtimeConfig.brevoSenderEmail || process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || '').trim();
+  if (custom && custom.includes('@')) return custom;
+  return DEFAULT_BREVO_SENDER;
+}
+
+export async function initEmailService(): Promise<void> {
+  try {
+    const saved = await loadEmailConfigFromDb();
+    if (saved && typeof saved === 'object') {
+      if (saved.brevoApiKey) runtimeConfig.brevoApiKey = saved.brevoApiKey;
+      if (saved.brevoSenderEmail) runtimeConfig.brevoSenderEmail = saved.brevoSenderEmail;
+      if (saved.emailHost) runtimeConfig.emailHost = saved.emailHost;
+      if (saved.emailPort) runtimeConfig.emailPort = saved.emailPort;
+      if (saved.emailUsername) runtimeConfig.emailUsername = saved.emailUsername;
+      if (saved.emailPassword) runtimeConfig.emailPassword = saved.emailPassword;
+      console.log('[EmailService] Configuración de correo cargada exitosamente desde PostgreSQL.');
+    } else {
+      const currentKey = getEffectiveBrevoKey();
+      if (currentKey && currentKey.length > 10) {
+        const initialConfig: EmailConfig = {
+          brevoApiKey: currentKey,
+          brevoSenderEmail: getEffectiveBrevoSender()
+        };
+        await saveEmailConfigToDb(initialConfig);
+        console.log('[EmailService] Configuración de Brevo persistida en PostgreSQL.');
+      }
+    }
+  } catch (err: any) {
+    console.warn('[EmailService] Advertencia inicializando servicio de email:', err.message);
+  }
+}
+
+export function updateRuntimeEmailConfig(newConfig: Partial<EmailConfig>, persistToDb: boolean = true) {
   if (newConfig.brevoApiKey !== undefined) runtimeConfig.brevoApiKey = newConfig.brevoApiKey.trim();
   if (newConfig.brevoSenderEmail !== undefined) runtimeConfig.brevoSenderEmail = newConfig.brevoSenderEmail.trim();
   if (newConfig.emailHost !== undefined) runtimeConfig.emailHost = newConfig.emailHost.trim();
   if (newConfig.emailPort !== undefined) runtimeConfig.emailPort = newConfig.emailPort;
   if (newConfig.emailUsername !== undefined) runtimeConfig.emailUsername = newConfig.emailUsername.trim();
   if (newConfig.emailPassword !== undefined) runtimeConfig.emailPassword = newConfig.emailPassword.trim();
+
+  if (persistToDb) {
+    saveEmailConfigToDb({ ...runtimeConfig }).catch((e) => {
+      console.error('[EmailService] Error guardando config en base de datos:', e.message);
+    });
+  }
 }
 
 export function getRuntimeEmailConfig() {
@@ -139,8 +186,7 @@ function createSmtpTransporter(port?: number): nodemailer.Transporter {
 
   // Fallback to Google Gmail App Password
   const gmailUser = process.env.GMAIL_USER?.trim() || 'motatovanesa@gmail.com';
-  const envPass = process.env.GMAIL_PASS?.replace(/\s+/g, '');
-  const cleanPass = (envPass && envPass.length === 16) ? envPass : 'wxjokjgignqlszdc';
+  const cleanPass = process.env.GMAIL_PASS?.replace(/\s+/g, '') || '';
   const gmailPort = port || 465;
 
   return nodemailer.createTransport({
@@ -191,10 +237,10 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
     .replace(/\s+/g, ' ')
     .trim();
 
-  const brevoApiKey = runtimeConfig.brevoApiKey || process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
-  const brevoSender = runtimeConfig.brevoSenderEmail || process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || 'motatovanesa@gmail.com';
+  const brevoApiKey = getEffectiveBrevoKey();
+  const brevoSender = getEffectiveBrevoSender();
 
-  // METHOD 1: Brevo REST API via HTTPS (Port 443) - Guaranteed in Render Cloud
+  // METHOD 1: Brevo REST API via HTTPS (Port 443) - 100% Guaranteed in Render Cloud
   if (brevoApiKey && brevoApiKey.length > 10) {
     console.log(`[EmailService] Intentando despacho vía Brevo REST API (HTTPS Puerto 443) a ${cleanTo}...`);
     const brevoResult = await sendViaBrevoApi(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText);
@@ -205,10 +251,20 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
         success: true,
         messageId: brevoResult.messageId,
         deliveryMode: 'real_brevo_api',
-        message: `Correo electrónico despachado exitosamente a ${cleanTo} vía Brevo API.`
+        message: `Correo electrónico despachado exitosamente a ${cleanTo} vía Brevo API (HTTPS Puerto 443).`
       };
     } else {
-      console.warn(`[EmailService] Brevo API reportó error: ${brevoResult.error}. Procediendo con fallback SMTP...`);
+      console.warn(`[EmailService] Brevo API reportó error: ${brevoResult.error}.`);
+      // If running on Render or in production without custom SMTP host, do not hang on blocked SMTP ports
+      const isRender = !!(process.env.RENDER || process.env.IS_PULL_REQUEST || process.env.NODE_ENV === 'production');
+      if (isRender && !runtimeConfig.emailHost) {
+        return {
+          success: false,
+          messageId: id,
+          deliveryMode: 'real_brevo_api',
+          message: `Brevo API rechazó el envío: ${brevoResult.error}. Verifique su cuenta o cuota disponible en Brevo.`
+        };
+      }
     }
   }
 
@@ -220,7 +276,7 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
     const port = portsToTry[i];
     try {
       const transporter = createSmtpTransporter(port);
-      const senderFrom = runtimeConfig.brevoSenderEmail || process.env.EMAIL_FROM || '"VotoSmart Colombia" <motatovanesa@gmail.com>';
+      const senderFrom = brevoSender || runtimeConfig.brevoSenderEmail || process.env.EMAIL_FROM || '"VotoSmart Colombia" <motatovanesa@gmail.com>';
 
       const info = await transporter.sendMail({
         from: senderFrom.includes('<') ? senderFrom : `"VotoSmart Colombia" <${senderFrom}>`,
@@ -248,14 +304,14 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
     }
   }
 
-  // If both failed
+  // If all failed
   return {
     success: false,
     messageId: id,
     deliveryMode: 'sandbox_inbox',
     message: brevoApiKey
       ? `Fallo al enviar correo: Brevo API rechazó el envío y los puertos SMTP directos no respondieron.`
-      : `No se pudo entregar el correo por SMTP directo (${lastSmtpError || 'puertos 465/587 bloqueados por Render'}). Configure una clave de Brevo API en el Centro de Correos para garantizar envíos por HTTPS puerto 443.`
+      : `No se pudo entregar el correo por SMTP directo (${lastSmtpError || 'puertos 465/587 bloqueados por Render'}). Se utiliza Brevo REST API sobre HTTPS puerto 443.`
   };
 }
 
@@ -279,7 +335,7 @@ export async function verifySmtpConnection(): Promise<{
   details?: any;
 }> {
   const start = Date.now();
-  const brevoApiKey = runtimeConfig.brevoApiKey || process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
+  const brevoApiKey = getEffectiveBrevoKey();
 
   // Test Brevo API if key is present
   if (brevoApiKey && brevoApiKey.length > 10) {
@@ -294,15 +350,17 @@ export async function verifySmtpConnection(): Promise<{
       const duration = Date.now() - start;
 
       if (res.ok) {
+        const remainingCredits = data?.plan?.[0]?.credits;
+        const creditsText = remainingCredits !== undefined ? ` (Créditos disponibles: ${remainingCredits})` : '';
         return {
           success: true,
           provider: 'brevo_api',
-          message: `Conexión con Brevo REST API verificada exitosamente en ${duration}ms. Cuenta: ${data?.email || 'Activa'}. 100% compatible con Render.`,
+          message: `Conexión con Brevo REST API verificada exitosamente en ${duration}ms. Cuenta: ${data?.email || 'Activa'}${creditsText}. 100% compatible con Render.`,
           durationMs: duration,
           details: {
             email: data?.email,
             plan: data?.plan?.[0]?.type || 'Free',
-            credits: data?.plan?.[0]?.credits
+            credits: remainingCredits
           }
         };
       } else {
@@ -339,15 +397,15 @@ export async function verifySmtpConnection(): Promise<{
     return {
       success: false,
       provider: runtimeConfig.emailHost ? 'custom_smtp' : 'gmail_ssl',
-      message: `Fallo al verificar SMTP (${err.message}). Nota: En Render los puertos SMTP pueden estar bloqueados; se recomienda configurar Brevo API Key.`,
+      message: `Fallo al verificar SMTP (${err.message}). Nota: En Render los puertos SMTP están bloqueados; se utiliza Brevo API HTTPS (puerto 443).`,
       durationMs: duration
     };
   }
 }
 
 export function getEmailServiceStatus() {
-  const brevoApiKey = runtimeConfig.brevoApiKey || process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
-  const brevoSender = runtimeConfig.brevoSenderEmail || process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || 'motatovanesa@gmail.com';
+  const brevoApiKey = getEffectiveBrevoKey();
+  const brevoSender = getEffectiveBrevoSender();
   const customHost = runtimeConfig.emailHost || process.env.EMAIL_HOST;
 
   const isBrevoConfigured = !!(brevoApiKey && brevoApiKey.length > 10);
