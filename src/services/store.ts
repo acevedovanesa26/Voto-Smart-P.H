@@ -1646,10 +1646,21 @@ class DataStore {
     const complexOwners = this.getOwners(assembly.complexId);
     const cleanDoc = (documentNumber || '').trim();
     const cleanId = (voterUserId || '').replace('user-', '');
+    const normDoc = (d?: string) => (d || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const cleanNorm = normDoc(cleanDoc);
 
-    const owner = complexOwners.find(
-      (o) => o.id === voterUserId || o.id === cleanId || (cleanDoc && o.documentNumber === cleanDoc)
+    let owner = complexOwners.find(
+      (o) =>
+        o.id === voterUserId ||
+        o.id === cleanId ||
+        (cleanNorm && normDoc(o.documentNumber) === cleanNorm) ||
+        (cleanDoc && o.documentNumber === cleanDoc)
     );
+
+    // If voter is the administrator or test simulator, map to registered admin owner or first active owner
+    if (!owner && (voterUserId === 'user-admin' || cleanId === 'admin')) {
+      owner = complexOwners.find((o) => normDoc(o.documentNumber) === normDoc('52.987.123')) || complexOwners[0];
+    }
 
     if (!owner) {
       return {
@@ -1667,7 +1678,7 @@ class DataStore {
 
     // Filter verification
     const eligibleList = this.getEligibleVotersForVote(voteId);
-    const isIncluded = eligibleList.some((o) => o.id === owner.id);
+    const isIncluded = eligibleList.some((o) => o.id === owner?.id);
 
     if (!isIncluded) {
       const type = vote.filterConfig?.targetAudience || vote.filterConfig?.filterType;
@@ -1815,8 +1826,9 @@ class DataStore {
     const assembly = this.assemblies.find((a) => a.id === vote.assemblyId);
     const complexId = assembly?.complexId || this.complex.id;
 
-    // Remove vote records
+    // Remove vote records and participations completely
     this.voteRecords = this.voteRecords.filter((r) => r.voteId !== id);
+    this.participations = this.participations.filter((p) => p.voteId !== id);
     this.votes = this.votes.filter((v) => v.id !== id);
     this.notifyChange();
 
@@ -1845,8 +1857,9 @@ class DataStore {
     delete vote.closedAt;
     delete vote.closedBy;
 
-    // Clear previous vote records
+    // Clear previous vote records AND participations so voters can participate again
     this.voteRecords = this.voteRecords.filter((r) => r.voteId !== id);
+    this.participations = this.participations.filter((p) => p.voteId !== id);
     this.notifyChange();
 
     this.addAuditLog(
@@ -1892,17 +1905,46 @@ class DataStore {
       throw new Error(eligibility.reason || 'No estás habilitado para participar en esta votación.');
     }
 
-    // 1. Strict Duplicate Check on participation table
-    const existingParticipation = this.participations.find(
-      (p) => p.voteId === voteId && (p.voterUserId === voterUserId || (p.voterDocument === voterDocument && p.voterApartment === voterApartment))
-    );
+    const normDoc = (d?: string) => (d || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const normApto = (a?: string) => (a || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+
+    // Owner and exact legal metrics
+    const owner = eligibility.owner;
+    const effectiveApto = (owner && owner.apartment) ? `${owner.building ? owner.building + ' ' : ''}${owner.apartment}` : voterApartment;
+    const effectiveDoc = (owner && owner.documentNumber) ? owner.documentNumber : voterDocument;
+    const effectiveCoefficient = (owner && owner.coefficient && owner.coefficient > 0) ? owner.coefficient : (voterCoefficient > 0 ? voterCoefficient : 7.15);
+    const effectiveName = (owner && owner.name) ? owner.name : voterName;
+
+    // 1. Strict Duplicate Check on participation table (by apartment, registered owner ID or document)
+    const existingParticipation = this.participations.find((p) => {
+      if (p.voteId !== voteId) return false;
+      
+      // If owner matched, verify by owner identity or document
+      if (owner && p.voterDocument && normDoc(p.voterDocument) === normDoc(owner.documentNumber)) {
+        return true;
+      }
+      // Check exact apartment match
+      if (effectiveApto && normApto(p.voterApartment) && normApto(p.voterApartment) === normApto(effectiveApto)) {
+        return true;
+      }
+      // Check document match if valid
+      if (effectiveDoc && normDoc(effectiveDoc) !== 'na' && normDoc(p.voterDocument) === normDoc(effectiveDoc)) {
+        return true;
+      }
+      // Check voterUserId for authenticated non-admin accounts
+      if (voterUserId && voterUserId !== 'user-admin' && p.voterUserId === voterUserId) {
+        return true;
+      }
+      return false;
+    });
+
     if (existingParticipation) {
-      throw new Error('Ya registraste tu voto en esta votación. No se permiten votos duplicados.');
+      throw new Error(`El inmueble ${effectiveApto} ya registró su voto en esta votación. No se permiten votos duplicados.`);
     }
 
     const timestamp = new Date().toISOString();
     const hashRandom = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const receiptCode = `REC-${voteId.slice(-4).toUpperCase()}-${voterApartment.replace(/\s+/g, '')}-${hashRandom}`;
+    const receiptCode = `REC-${voteId.slice(-4).toUpperCase()}-${effectiveApto.replace(/\s+/g, '')}-${hashRandom}`;
     const verificationCode = `VER-${hashRandom}-${Date.now().toString().slice(-4)}`;
 
     // 2. Register Participation (Identity proof)
@@ -1911,10 +1953,10 @@ class DataStore {
       voteId,
       assemblyId: vote.assemblyId,
       voterUserId,
-      voterName,
-      voterApartment,
-      voterDocument,
-      voterCoefficient,
+      voterName: effectiveName,
+      voterApartment: effectiveApto,
+      voterDocument: effectiveDoc,
+      voterCoefficient: effectiveCoefficient,
       votedAt: timestamp,
       receiptCode
     };
@@ -1926,8 +1968,8 @@ class DataStore {
       voteId,
       assemblyId: vote.assemblyId,
       voterUserId: vote.isSecret ? undefined : voterUserId, // Privacy separation if secret
-      voterApartment: vote.isSecret ? 'Anónimo (P.H.)' : voterApartment,
-      voterCoefficient,
+      voterApartment: vote.isSecret ? 'Anónimo (P.H.)' : effectiveApto,
+      voterCoefficient: effectiveCoefficient,
       selectedOptionIds,
       verificationCode,
       timestamp
@@ -1937,10 +1979,10 @@ class DataStore {
     // 4. Audit trail
     this.addAuditLog(
       voterUserId,
-      voterName,
+      effectiveName,
       'owner',
       'VOTO_REGISTRADO',
-      `Voto registrado en "${vote.title}" (Comprobante: ${receiptCode})`
+      `Voto registrado en "${vote.title}" por ${effectiveApto} (Comprobante: ${receiptCode})`
     );
 
     this.notifyChange();
@@ -1950,15 +1992,24 @@ class DataStore {
       receiptCode,
       verificationCode,
       votedAt: timestamp,
-      voterApartment,
-      voterCoefficient
+      voterApartment: effectiveApto,
+      voterCoefficient: effectiveCoefficient
     };
   }
 
   hasUserVoted(voteId: string, voterUserId: string, documentNumber?: string, apartment?: string): boolean {
-    return this.participations.some(
-      (p) => p.voteId === voteId && (p.voterUserId === voterUserId || (documentNumber && p.voterDocument === documentNumber) || (apartment && p.voterApartment === apartment))
-    );
+    const normDoc = (d?: string) => (d || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const normApto = (a?: string) => (a || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const targetDoc = normDoc(documentNumber);
+    const targetApto = normApto(apartment);
+
+    return this.participations.some((p) => {
+      if (p.voteId !== voteId) return false;
+      if (targetDoc && targetDoc !== 'na' && normDoc(p.voterDocument) === targetDoc) return true;
+      if (targetApto && targetApto !== 'aptocopropietario' && normApto(p.voterApartment) === targetApto) return true;
+      if (voterUserId && voterUserId !== 'user-admin' && p.voterUserId === voterUserId) return true;
+      return false;
+    });
   }
 
   // Calculate vote results with coefficients and tie detection

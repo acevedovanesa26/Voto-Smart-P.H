@@ -41,6 +41,8 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; mode?: string } | null>(null);
 
+  const [isVerifying, setIsVerifying] = useState(false);
+
   const checkStatus = async () => {
     setIsLoading(true);
     try {
@@ -64,6 +66,26 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
     }
   }, [isOpen]);
 
+  const handleVerifyOnly = async () => {
+    setIsVerifying(true);
+    setBrevoSaveFeedback(null);
+    try {
+      const verifyRes = await api.verifySmtp();
+      setBrevoSaveFeedback({
+        success: verifyRes.success,
+        message: verifyRes.message
+      });
+      await checkStatus();
+    } catch (err: any) {
+      setBrevoSaveFeedback({
+        success: false,
+        message: err.message || 'Error al verificar conexión'
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleSaveBrevo = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingBrevo(true);
@@ -75,7 +97,7 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
       });
       setBrevoSaveFeedback({
         success: true,
-        message: res.message || 'Configuración guardada correctamente.'
+        message: res.message || 'Configuración guardada de forma permanente.'
       });
       // Run verification
       const verifyRes = await api.verifySmtp();
@@ -233,30 +255,35 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
             <Badge variant="teal" size="sm">Recomendado Render</Badge>
           </div>
 
-          <p className="text-[11px] text-indigo-900 leading-relaxed">
-            <strong>¿Por qué Brevo en Render?</strong> Render y la mayoría de nubes bloquean las conexiones SMTP salientes (puertos 25, 465 y 587) para prevenir spam. 
-            Con Brevo, los correos se entregan vía <strong>HTTPS REST API en puerto 443</strong>, lo que garantiza que los correos lleguen al instante sin bloqueos de firewall.
-            Brevo ofrece <strong>300 correos gratis al día</strong> sin necesidad de tarjeta de crédito.
-          </p>
+          <div className="text-[11px] text-indigo-900 leading-relaxed space-y-1.5">
+            <p>
+              <strong>¿Por qué Brevo en Render?</strong> Render bloquea los puertos SMTP salientes (25, 465 y 587) en planes gratuitos/starter.
+              Con Brevo, los correos se entregan vía <strong>HTTPS REST API en puerto 443</strong> (o Relay en puerto 2525), garantizando entrega instantánea sin bloqueos de red. Brevo incluye <strong>300 correos gratis al día</strong>.
+            </p>
+            <div className="p-2 bg-white/80 rounded-lg border border-indigo-200 text-[10px] text-indigo-950 space-y-0.5">
+              <p><strong>• Clave API v3 recomendada:</strong> En Brevo ve a <em>Configuración &gt; SMTP &amp; API &gt; Claves API</em> (empieza por <code>xkeysib-...</code>).</p>
+              <p><strong>• Remitente obligatorio:</strong> El correo debe estar verificado en <em>Brevo &gt; Remitentes e IP</em>.</p>
+            </div>
+          </div>
 
           <form onSubmit={handleSaveBrevo} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-indigo-950 mb-1 uppercase">
-                  Clave API de Brevo (API Key v3)
+                  Clave API de Brevo (xkeysib-...)
                 </label>
                 <input
                   type="password"
                   value={brevoApiKey}
                   onChange={(e) => setBrevoApiKey(e.target.value)}
-                  placeholder={smtpStatus?.apiKeyMasked ? `Actual: ${smtpStatus.apiKeyMasked}` : 'xkeysib-xxxxxxxxxxxxxxxx'}
+                  placeholder={smtpStatus?.apiKeyMasked ? `Guardada: ${smtpStatus.apiKeyMasked}` : 'xkeysib-xxxxxxxxxxxxxxxx'}
                   className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-indigo-950 mb-1 uppercase">
-                  Correo Emisor Autorizado
+                  Correo Emisor Verificado
                 </label>
                 <input
                   type="email"
@@ -268,20 +295,33 @@ export const EmailCenterModal: React.FC<EmailCenterModalProps> = ({ isOpen, onCl
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="text-[10px] text-indigo-700">
-                También puede configurarse en Render como variable de entorno <code>BREVO_API_KEY</code>.
+                También configurable en Render en Environment: <code>BREVO_API_KEY</code>
               </span>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                isLoading={isSavingBrevo}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
-                leftIcon={<KeyRound className="w-3.5 h-3.5" />}
-              >
-                Guardar y Probar Brevo
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  isLoading={isVerifying}
+                  onClick={handleVerifyOnly}
+                  className="border-indigo-300 text-indigo-800 hover:bg-indigo-100 font-medium"
+                  leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                >
+                  Probar Conexión
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isSavingBrevo}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                  leftIcon={<KeyRound className="w-3.5 h-3.5" />}
+                >
+                  Guardar y Activar
+                </Button>
+              </div>
             </div>
           </form>
 

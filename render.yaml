@@ -14,6 +14,14 @@ services:
         fromDatabase:
           name: votosmart-db
           property: connectionString
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_PASS
+        sync: false
 
 databases:
   - name: votosmart-db

@@ -1,9 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { store } from './src/services/store';
-import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection, updateRuntimeEmailConfig } from './server/emailService';
+import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection, updateRuntimeEmailConfig, syncPersistedEmailConfig } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
 
 const app = express();
@@ -979,10 +980,10 @@ app.get('/api/email-service/status', (req, res) => {
   res.json(getEmailServiceStatus());
 });
 
-app.post('/api/email-service/config', (req, res) => {
+app.post('/api/email-service/config', async (req, res) => {
   try {
     const { brevoApiKey, brevoSenderEmail, emailHost, emailPort, emailUsername, emailPassword } = req.body;
-    updateRuntimeEmailConfig({
+    await updateRuntimeEmailConfig({
       brevoApiKey,
       brevoSenderEmail,
       emailHost,
@@ -992,7 +993,7 @@ app.post('/api/email-service/config', (req, res) => {
     });
     res.json({
       success: true,
-      message: 'Configuración del servicio de correo actualizada.',
+      message: 'Configuración del servicio de correo guardada de forma permanente.',
       status: getEmailServiceStatus()
     });
   } catch (error: any) {
@@ -1110,6 +1111,11 @@ async function startServer() {
   // Initialize Database connection (PostgreSQL if DATABASE_URL is set, otherwise In-Memory fallback)
   await initDb().catch((err) => {
     console.error('Error in initDb:', err);
+  });
+
+  // Restore persisted email configuration
+  await syncPersistedEmailConfig().catch((err) => {
+    console.error('Error syncing email config:', err);
   });
 
   if (process.env.NODE_ENV !== 'production') {

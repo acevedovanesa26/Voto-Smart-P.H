@@ -75,9 +75,9 @@ export const DEMO_USERS: User[] = [
     phone: '+57 310 987 6543',
     documentType: 'CC',
     documentNumber: '52.987.123',
-    apartment: 'Oficina Admón',
-    building: 'Torre Adm',
-    coefficient: 0,
+    apartment: 'Apto 102',
+    building: 'Torre A',
+    coefficient: 7.15,
     status: 'active',
     complexId: 'complex-1',
     createdAt: '2026-01-10T08:00:00Z'
@@ -203,6 +203,22 @@ export const DEMO_USERS: User[] = [
 ];
 
 export const DEMO_OWNERS: Owner[] = [
+  {
+    id: 'owner-carolina',
+    complexId: 'complex-1',
+    name: 'Carolina Méndez Rojas',
+    documentType: 'CC',
+    documentNumber: '52.987.123',
+    email: 'admin@votosmart.app',
+    phone: '+57 310 987 6543',
+    building: 'Torre A',
+    apartment: 'Apto 102',
+    coefficient: 7.1500,
+    status: 'active',
+    isCouncilMember: true,
+    councilRole: 'Administradora Delegada',
+    createdAt: '2026-01-10T08:00:00Z'
+  },
   {
     id: 'owner-ucentral',
     complexId: 'complex-1',
@@ -882,11 +898,36 @@ export const DEMO_VOTES: Vote[] = [
     ],
     minSelections: 1,
     maxSelections: 1,
-    status: 'scheduled',
+    status: 'active',
     requiresCoefficient: true,
     isSecret: false,
     showLiveResults: true,
-    allowAbstain: true
+    allowAbstain: true,
+    startedAt: '2026-08-28T19:00:00Z',
+    totalVoters: 11
+  },
+  {
+    id: 'vote-4',
+    assemblyId: 'assembly-1',
+    complexId: 'complex-1',
+    title: 'Aprobación de Cuota Extraordinaria para Mantenimiento de Fachadas',
+    description: 'Aprobación de cuota extraordinaria de $350.000 COP por inmueble diferida a 6 cuotas mensuales, destinada al lavado, hidrófugo, resane e impermeabilización general de fachadas y cubiertas de Torres A y B.',
+    question: '¿Aprueba usted la cuota extraordinaria para las obras de impermeabilización y mantenimiento de fachadas bajo las condiciones presentadas?',
+    type: 'yes_no',
+    options: [
+      { id: 'opt-4-yes', label: 'SÍ, APRUEBO LA CUOTA EXTRAORDINARIA', color: 'emerald' },
+      { id: 'opt-4-no', label: 'NO APRUEBO LA CUOTA EXTRAORDINARIA', color: 'rose' },
+      { id: 'opt-4-abs', label: 'ME ABSTENGO', color: 'slate' }
+    ],
+    minSelections: 1,
+    maxSelections: 1,
+    status: 'active',
+    requiresCoefficient: true,
+    isSecret: false,
+    showLiveResults: true,
+    allowAbstain: true,
+    startedAt: '2026-08-28T19:15:00Z',
+    totalVoters: 11
   },
   // Votes for complex-2 (Altos de la Colina P.H.)
   {

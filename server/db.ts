@@ -174,3 +174,57 @@ export async function saveStateNow(): Promise<boolean> {
     return false;
   }
 }
+
+const EMAIL_CONFIG_FILE = path.join(DATA_DIR, 'email_config.json');
+
+export async function saveEmailConfig(config: any): Promise<boolean> {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(EMAIL_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+  } catch (err: any) {
+    console.warn('[Database] Advertencia al escribir email_config local:', err.message);
+  }
+
+  if (pool && isConnected) {
+    try {
+      await pool.query(
+        `
+        INSERT INTO app_state (key, data, updated_at)
+        VALUES ('email_config', $1, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE
+        SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP;
+        `,
+        [JSON.stringify(config)]
+      );
+      return true;
+    } catch (err: any) {
+      console.warn('[Database] Advertencia guardando email_config en PostgreSQL:', err.message);
+    }
+  }
+  return true;
+}
+
+export async function loadEmailConfig(): Promise<any | null> {
+  if (pool && isConnected) {
+    try {
+      const res = await pool.query(`SELECT data FROM app_state WHERE key = 'email_config' LIMIT 1;`);
+      if (res.rows.length > 0 && res.rows[0].data) {
+        return res.rows[0].data;
+      }
+    } catch (err: any) {
+      console.warn('[Database] Advertencia leyendo email_config de PostgreSQL:', err.message);
+    }
+  }
+
+  try {
+    if (fs.existsSync(EMAIL_CONFIG_FILE)) {
+      const raw = fs.readFileSync(EMAIL_CONFIG_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (err: any) {
+    console.warn('[Database] Advertencia leyendo email_config local:', err.message);
+  }
+  return null;
+}
