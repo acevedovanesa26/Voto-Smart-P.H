@@ -44,59 +44,116 @@ function maskDatabaseUrl(urlStr: string): string {
   }
 }
 
-async function attemptPoolConnection(connString: string, sslOption: boolean | { rejectUnauthorized: boolean }): Promise<{ pool: Pool; client: any }> {
-  const config: PoolConfig = {
-    connectionString: connString,
-    ssl: sslOption,
-    connectionTimeoutMillis: 10000,
-  };
-
-  const testPool = new Pool(config);
-  testPool.on('error', (err) => {
-    console.warn('[Database] Advertencia en conexión background de pool:', err.message);
-  });
-
-  const client = await testPool.connect();
-  return { pool: testPool, client };
+interface ConnectionCandidate {
+  url: string;
+  ssl: boolean | { rejectUnauthorized: boolean };
+  label: string;
 }
 
-async function establishConnection(rawUrl: string): Promise<{ pool: Pool; client: any }> {
-  const isRender = process.env.RENDER === 'true' || !!process.env.IS_PULL_REQUEST || !!process.env.RENDER_SERVICE_ID;
-  let targetUrl = rawUrl.trim();
+function buildCandidates(rawUrl: string): ConnectionCandidate[] {
+  const trimmed = rawUrl.trim();
+  const candidates: ConnectionCandidate[] = [];
 
-  // If NOT on Render and an internal Render host is provided (dpg-xxxx-a without domain), try resolving to external domain
-  if (!isRender) {
-    try {
-      const parsed = new URL(targetUrl);
-      if (parsed.hostname.startsWith('dpg-') && !parsed.hostname.includes('.')) {
-        parsed.hostname = `${parsed.hostname}.oregon-postgres.render.com`;
-        targetUrl = parsed.toString();
-      }
-    } catch {
-      // ignore URL parsing error
-    }
-  }
-
-  const isLocalhost = targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1');
-  const hasDisableSsl = targetUrl.includes('sslmode=disable');
-
-  // Strategy 1: If localhost or explicitly disabled, start without SSL; otherwise start with rejectUnauthorized: false
-  const primarySsl = (!isLocalhost && !hasDisableSsl) ? { rejectUnauthorized: false } : false;
-
+  let parsed: URL | null = null;
   try {
-    return await attemptPoolConnection(targetUrl, primarySsl);
-  } catch (firstErr: any) {
-    // Strategy 2: If primary failed with an SSL or handshake error, retry with inverse SSL setting
-    const errMsg = (firstErr.message || '').toLowerCase();
-    const isSslRelated = errMsg.includes('ssl') || errMsg.includes('tls') || errMsg.includes('encryption') || errMsg.includes('unsupported');
-
-    if (isSslRelated) {
-      const alternateSsl = !primarySsl;
-      console.log(`[Database] Reintentando conexión con SSL=${alternateSsl ? 'habilitado' : 'deshabilitado'}...`);
-      return await attemptPoolConnection(targetUrl, alternateSsl);
-    }
-    throw firstErr;
+    parsed = new URL(trimmed);
+  } catch {
+    return [{ url: trimmed, ssl: { rejectUnauthorized: false }, label: 'URL directa' }];
   }
+
+  const host = parsed.hostname;
+  const isRenderInternal = host.startsWith('dpg-') && !host.includes('.');
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+
+  if (isRenderInternal) {
+    // 1. External Oregon FQDN with SSL (Verified default in Render, works across regions and outside VPC)
+    const oregonParsed = new URL(trimmed);
+    oregonParsed.hostname = `${host}.oregon-postgres.render.com`;
+    candidates.push({
+      url: oregonParsed.toString(),
+      ssl: { rejectUnauthorized: false },
+      label: 'Render Oregon FQDN (SSL)',
+    });
+
+    // 2. Direct internal Render host WITHOUT SSL (Standard internal VPC network within same region)
+    candidates.push({
+      url: trimmed,
+      ssl: false,
+      label: 'Render Red Interna VPC (Sin SSL)',
+    });
+
+    // 3. Direct internal Render host WITH SSL
+    candidates.push({
+      url: trimmed,
+      ssl: { rejectUnauthorized: false },
+      label: 'Render Red Interna VPC (Con SSL)',
+    });
+
+    // 4. External Ohio / Frankfurt fallbacks
+    const ohioParsed = new URL(trimmed);
+    ohioParsed.hostname = `${host}.ohio-postgres.render.com`;
+    candidates.push({
+      url: ohioParsed.toString(),
+      ssl: { rejectUnauthorized: false },
+      label: 'Render Ohio FQDN (SSL)',
+    });
+
+    const frankfurtParsed = new URL(trimmed);
+    frankfurtParsed.hostname = `${host}.frankfurt-postgres.render.com`;
+    candidates.push({
+      url: frankfurtParsed.toString(),
+      ssl: { rejectUnauthorized: false },
+      label: 'Render Frankfurt FQDN (SSL)',
+    });
+  } else if (!isLocalhost) {
+    // External remote host (e.g. Render external, Supabase, Neon)
+    candidates.push({
+      url: trimmed,
+      ssl: { rejectUnauthorized: false },
+      label: 'Host Remoto Externo (SSL)',
+    });
+    candidates.push({
+      url: trimmed,
+      ssl: false,
+      label: 'Host Remoto Externo (Sin SSL)',
+    });
+  } else {
+    // Localhost development
+    candidates.push({
+      url: trimmed,
+      ssl: false,
+      label: 'Localhost (Sin SSL)',
+    });
+  }
+
+  return candidates;
+}
+
+async function establishConnection(rawUrl: string): Promise<{ pool: Pool; client: any; activeCandidate: ConnectionCandidate }> {
+  const candidates = buildCandidates(rawUrl);
+  let lastError: any = null;
+
+  for (const candidate of candidates) {
+    try {
+      const config: PoolConfig = {
+        connectionString: candidate.url,
+        ssl: candidate.ssl,
+        connectionTimeoutMillis: 7000,
+      };
+      const testPool = new Pool(config);
+      testPool.on('error', (err) => {
+        console.warn('[Database] Advertencia en conexión background de pool:', err.message);
+      });
+
+      const client = await testPool.connect();
+      return { pool: testPool, client, activeCandidate: candidate };
+    } catch (err: any) {
+      lastError = err;
+      // Continue to next candidate silently
+    }
+  }
+
+  throw lastError || new Error('No se pudo establecer conexión con PostgreSQL');
 }
 
 async function setupTablesAndSync(client: any): Promise<void> {
@@ -152,11 +209,11 @@ export async function initDb(): Promise<boolean> {
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const { pool: connectedPool, client } = await establishConnection(connectionString);
+      const { pool: connectedPool, client, activeCandidate } = await establishConnection(connectionString);
       pool = connectedPool;
       isConnected = true;
       dbError = null;
-      console.log('[Database] PostgreSQL conectado exitosamente.');
+      console.log(`[Database] PostgreSQL conectado exitosamente vía: ${activeCandidate.label}.`);
 
       try {
         await setupTablesAndSync(client);
@@ -209,11 +266,11 @@ function startBackgroundReconnect(connString: string) {
       return;
     }
     try {
-      const { pool: newPool, client } = await establishConnection(connString);
+      const { pool: newPool, client, activeCandidate } = await establishConnection(connString);
       pool = newPool;
       isConnected = true;
       dbError = null;
-      console.log('[Database] ¡Reconexión exitosa con PostgreSQL establecida en segundo plano!');
+      console.log(`[Database] ¡Reconexión exitosa con PostgreSQL establecida vía ${activeCandidate.label}!`);
       try {
         await setupTablesAndSync(client);
       } finally {
