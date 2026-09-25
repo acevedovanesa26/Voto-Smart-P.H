@@ -220,8 +220,16 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
       {/* Voter Profile Banner */}
       <div className="bg-gradient-to-r from-teal-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-bold uppercase">
-            <ShieldCheck className="w-4 h-4" /> Votante Acreditado
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-bold uppercase">
+              <ShieldCheck className="w-4 h-4" /> Votante Acreditado
+            </div>
+            {(user?.isCouncilMember || user?.councilRole || user?.isBoardMember || user?.boardRole) && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-extrabold uppercase tracking-wide">
+                <Award className="w-4 h-4 text-amber-300" />
+                <span>🏛️ Mesa Directiva: {user.councilRole || user.boardRole || 'Dignatario'}</span>
+              </div>
+            )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black font-display tracking-tight">
             {user?.name || 'Copropietario'}

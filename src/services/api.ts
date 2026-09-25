@@ -610,14 +610,16 @@ export const api = {
 
   async sendResultsEmails(
     assemblyId: string,
-    recipientsType: 'all' | 'attended' | 'voted',
+    recipientsType: 'all' | 'attended' | 'voted' | 'specific',
     subject: string,
-    messageBody?: string
-  ): Promise<{ success?: boolean; sentCount: number; total: number }> {
+    messageBody?: string,
+    selectedOwnerIds?: string[],
+    attachment?: { name: string; size?: string; dataUri?: string }
+  ): Promise<{ success?: boolean; sentCount: number; total: number; attachment?: { name: string; size?: string } }> {
     const res = await fetch(`${API_BASE}/assemblies/${assemblyId}/send-results`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipientsType, subject, messageBody })
+      body: JSON.stringify({ recipientsType, subject, messageBody, selectedOwnerIds, attachment })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -628,14 +630,16 @@ export const api = {
 
   async sendMinutesEmails(
     assemblyId: string,
-    recipientsType: 'all' | 'attended' | 'voted',
+    recipientsType: 'all' | 'attended' | 'voted' | 'specific',
     subject: string,
-    messageBody?: string
-  ): Promise<{ success?: boolean; sentCount: number; total: number }> {
+    messageBody?: string,
+    selectedOwnerIds?: string[],
+    attachment?: { name: string; size?: string; dataUri?: string }
+  ): Promise<{ success?: boolean; sentCount: number; total: number; attachment?: { name: string; size?: string } }> {
     const res = await fetch(`${API_BASE}/assemblies/${assemblyId}/send-minutes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipientsType, subject, messageBody })
+      body: JSON.stringify({ recipientsType, subject, messageBody, selectedOwnerIds, attachment })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -651,6 +655,7 @@ export const api = {
   },
 
   async createStaffUser(staffData: {
+    ownerId?: string;
     name: string;
     email: string;
     role: 'admin' | 'president' | 'accountant' | 'secretary' | 'fiscal_auditor';
@@ -658,7 +663,7 @@ export const api = {
     documentType?: string;
     documentNumber?: string;
     password?: string;
-  }): Promise<{ user: User; initialPassword: string; message: string }> {
+  }): Promise<{ user: User; initialPassword: string; message: string; isExistingOwner?: boolean }> {
     const res = await fetch(`${API_BASE}/staff`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

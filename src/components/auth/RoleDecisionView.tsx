@@ -35,9 +35,10 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
   onEnterAdmin,
   onEnterVoter,
   onOpenForgotPassword,
-  onOpenRegister
+  onOpenRegister,
+  onOpenComplexSwitcher
 }) => {
-  const { login, loginVoterWithOtp, registerVoterPassword, complex } = useAuth();
+  const { login, loginVoterWithOtp, registerVoterPassword, complex, complexes, switchComplex } = useAuth();
 
   // Admin form state
   const [adminEmail, setAdminEmail] = useState('');
@@ -229,11 +230,69 @@ export const RoleDecisionView: React.FC<RoleDecisionViewProps> = ({
           Ingreso a la Plataforma
         </h1>
 
-        <div className="inline-flex items-center gap-2 bg-slate-100/90 border border-slate-200 px-4 py-1.5 rounded-xl text-xs text-slate-700">
-          <Building2 className="w-4 h-4 text-teal-600" />
-          <span>Conjunto Activo: <strong className="text-slate-900">{complex?.name}</strong></span>
-          <span className="text-slate-400">•</span>
-          <span className="text-slate-500 font-medium">NIT: {complex?.nit || '901.458.789-2'}</span>
+        {/* Interactive Residential Complex Selector (Selection-only for voters, no creation) */}
+        <div className="max-w-2xl mx-auto p-4 sm:p-5 bg-gradient-to-br from-white via-teal-50/30 to-slate-50 border-2 border-teal-500/40 rounded-3xl shadow-sm text-left transition-all hover:border-teal-500/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center text-lg shadow-xs shrink-0">
+                {complex?.logo || '🏢'}
+              </div>
+              <div>
+                <span className="text-[11px] font-black text-teal-900 uppercase tracking-wider block">
+                  Copropiedad / Conjunto Activo
+                </span>
+                <span className="text-xs text-slate-500">
+                  Selecciona la copropiedad donde vas a votar o administrar:
+                </span>
+              </div>
+            </div>
+
+            {complexes.length > 1 && onOpenComplexSwitcher && (
+              <button
+                type="button"
+                onClick={onOpenComplexSwitcher}
+                className="text-[11px] text-teal-800 hover:text-teal-950 font-bold bg-white px-2.5 py-1 rounded-lg border border-teal-200 hover:border-teal-400 shadow-2xs transition-all self-start sm:self-auto shrink-0 flex items-center gap-1"
+              >
+                <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                Explorar lista ({complexes.length})
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <select
+              value={complex?.id || ''}
+              onChange={(e) => {
+                if (e.target.value) {
+                  switchComplex(e.target.value);
+                }
+              }}
+              className="w-full pl-3.5 pr-10 py-3 bg-white hover:bg-teal-50/40 border-2 border-teal-500/50 rounded-2xl text-slate-900 font-extrabold text-sm sm:text-base focus:ring-3 focus:ring-teal-500/30 focus:outline-hidden cursor-pointer shadow-xs transition-all appearance-none"
+            >
+              {complexes.map((c) => (
+                <option key={c.id} value={c.id} className="font-bold text-slate-900 py-1">
+                  🏢 {c.name} — {c.city} (NIT: {c.nit})
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-teal-700">
+              <Building2 className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="mt-3 pt-2.5 border-t border-teal-100 flex flex-wrap items-center justify-between text-[11px] text-slate-600 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-slate-700">📍 {complex?.address}, {complex?.city}</span>
+              <span className="text-slate-300">•</span>
+              <span className="font-mono text-slate-500">NIT: {complex?.nit}</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-teal-800 font-bold">{complex?.totalUnits} unidades</span>
+            </div>
+            <span className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Conjunto Seleccionado
+            </span>
+          </div>
         </div>
       </div>
 

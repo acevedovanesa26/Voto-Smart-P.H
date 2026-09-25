@@ -38,7 +38,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   initialRole = 'voter',
   onSuccessLogin
 }) => {
-  const { login, loginVoterWithOtp, registerVoterPassword, complex } = useAuth();
+  const { login, loginVoterWithOtp, registerVoterPassword, complex, complexes, switchComplex } = useAuth();
   const [activeTab, setActiveTab] = useState<'voter' | 'admin'>(initialRole);
 
   // Admin credentials
@@ -200,6 +200,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Acceso Seguro a VotoSmart" maxWidth="md">
       <div className="space-y-4 text-xs">
+        {/* Residential Complex Selector */}
+        <div className="p-3 bg-teal-50/70 border border-teal-200 rounded-xl space-y-1.5">
+          <label className="block text-[11px] font-bold text-teal-950 uppercase tracking-wide flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-teal-700" />
+            Conjunto Residencial / Edificio:
+          </label>
+          <select
+            value={complex?.id || ''}
+            onChange={(e) => {
+              if (e.target.value) switchComplex(e.target.value);
+            }}
+            className="w-full px-3 py-1.5 bg-white border border-teal-300 rounded-lg text-slate-900 font-bold text-xs focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+          >
+            {complexes.map((c) => (
+              <option key={c.id} value={c.id}>
+                🏢 {c.name} — {c.city}
+              </option>
+            ))}
+          </select>
+          <span className="text-[10px] text-teal-700 block">
+            📍 {complex?.address}, {complex?.city}
+          </span>
+        </div>
+
         {/* Role Tabs */}
         <div className="grid grid-cols-2 p-1.5 bg-slate-100 rounded-2xl gap-1">
           <button

@@ -396,6 +396,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       <ComplexSwitcherModal
         isOpen={showComplexModal}
+        allowManage={true}
         onClose={() => {
           setShowComplexModal(false);
           loadDashboardData();

@@ -156,6 +156,7 @@ function MainContent() {
 
       <ComplexSwitcherModal
         isOpen={showComplexModal}
+        allowManage={role === 'admin' || role === 'superadmin'}
         onClose={() => setShowComplexModal(false)}
       />
 

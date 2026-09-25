@@ -263,15 +263,12 @@ class DataStore {
     }
 
     // Auto mark attendance for active assembly if voter
-    if (user.role === 'owner') {
-      const activeAssembly = this.assemblies.find(a => a.status === 'in_progress' || a.status === 'scheduled');
-      if (activeAssembly) {
-        try {
-          const ownerId = owner?.id || (user.id.startsWith('user-owner-') ? user.id.replace('user-', '') : user.id);
-          this.toggleQuorumCheckIn(activeAssembly.id, ownerId, true, 'Ingreso con Contraseña');
-        } catch (e) {
-          // already checked in
-        }
+    if (owner || user.role === 'owner' || user.isCouncilMember) {
+      try {
+        const idToCheck = owner?.id || (user.id.startsWith('user-') ? user.id.replace('user-', '') : user.id);
+        this.autoCheckInForActiveAssemblies(idToCheck, 'Ingreso a Plataforma con Contraseña');
+      } catch (e) {
+        // already checked in
       }
     }
 
@@ -497,14 +494,11 @@ class DataStore {
     }
 
     // Auto mark attendance for active assembly if not already present
-    const activeAssembly = this.assemblies.find(a => a.status === 'in_progress' || a.status === 'scheduled');
-    if (activeAssembly && user) {
-      try {
-        const ownerId = owner?.id || (user.id.startsWith('user-owner-') ? user.id.replace('user-', '') : user.id);
-        this.toggleQuorumCheckIn(activeAssembly.id, ownerId, true, 'Activación de Contraseña');
-      } catch (e) {
-        // already checked in
-      }
+    try {
+      const ownerId = owner?.id || (user.id.startsWith('user-owner-') ? user.id.replace('user-', '') : user.id);
+      this.autoCheckInForActiveAssemblies(ownerId, 'Activación de Contraseña y Acceso');
+    } catch (e) {
+      // already checked in
     }
 
     this.addAuditLog(user.id, user.name, 'owner', 'ACTIVACION_CONTRASENA_VOTANTE', `Activación de cuenta y registro de contraseña para copropietario ${user.name}`);
@@ -684,14 +678,11 @@ class DataStore {
     }
 
     // Auto mark attendance for active assembly if not already present
-    const activeAssembly = this.assemblies.find(a => a.status === 'in_progress' || a.status === 'scheduled');
-    if (activeAssembly && user) {
-      try {
-        const ownerId = owner?.id || (user.id.startsWith('user-owner-') ? user.id.replace('user-', '') : user.id);
-        this.toggleQuorumCheckIn(activeAssembly.id, ownerId, true, 'Ingreso Virtual OTP');
-      } catch (e) {
-        // already registered
-      }
+    try {
+      const ownerId = owner?.id || (user!.id.startsWith('user-owner-') ? user!.id.replace('user-', '') : user!.id);
+      this.autoCheckInForActiveAssemblies(ownerId, 'Ingreso Virtual OTP');
+    } catch (e) {
+      // already registered
     }
 
     this.addAuditLog(user!.id, user!.name, 'owner', 'INGRESO_VOTANTE_OTP', `Ingreso exitoso con cédula ${user!.documentNumber} y código OTP verificado.`);
@@ -776,10 +767,15 @@ class DataStore {
 
   // Staff & Board Management (Exclusivo Administrador)
   getStaffUsers() {
-    return this.users.filter((u) => ['admin', 'president', 'accountant', 'secretary', 'fiscal_auditor'].includes(u.role));
+    return this.users.filter((u) => 
+      ['admin', 'president', 'accountant', 'secretary', 'fiscal_auditor'].includes(u.role) || 
+      !!u.isCouncilMember || 
+      !!u.isBoardMember
+    );
   }
 
   createStaffUser(staffData: {
+    ownerId?: string;
     name: string;
     email: string;
     role: 'admin' | 'president' | 'accountant' | 'secretary' | 'fiscal_auditor';
@@ -791,19 +787,108 @@ class DataStore {
     if (!['admin', 'president', 'accountant', 'secretary', 'fiscal_auditor'].includes(staffData.role)) {
       throw new Error('Rol no válido para miembro directivo o administrativo.');
     }
+
+    const roleNameMap: Record<string, string> = {
+      president: 'Presidente de Asamblea',
+      secretary: 'Secretaria de Asamblea',
+      accountant: 'Contador / Comisión Verificadora',
+      fiscal_auditor: 'Revisor Fiscal',
+      admin: 'Administrador Delegado'
+    };
+    const roleTitle = roleNameMap[staffData.role] || staffData.role;
+
+    if (staffData.password) {
+      assertPasswordPolicy(staffData.password);
+    }
+    const initialPass = staffData.password && staffData.password.trim().length >= 8 
+      ? staffData.password.trim() 
+      : `Voto${Math.floor(1000 + Math.random() * 9000)}!`;
+
+    // CASE 1: Assigning an existing owner from the census
+    if (staffData.ownerId) {
+      const owner = this.owners.find((o) => o.id === staffData.ownerId);
+      if (!owner) {
+        throw new Error('El copropietario seleccionado no fue encontrado en el censo.');
+      }
+
+      // Mark owner with distinctive council / board membership
+      owner.isCouncilMember = true;
+      owner.councilRole = roleTitle;
+
+      // Find or create their User record
+      let user = this.users.find(
+        (u) => 
+          u.id === `user-${owner.id}` || 
+          u.email.toLowerCase() === owner.email.toLowerCase() || 
+          (owner.documentNumber && u.documentNumber === owner.documentNumber)
+      );
+
+      if (user) {
+        user.role = staffData.role;
+        user.isCouncilMember = true;
+        user.councilRole = roleTitle;
+        user.isBoardMember = true;
+        user.boardRole = roleTitle;
+        if (staffData.password) {
+          this.userPasswords.set(user.email.toLowerCase(), initialPass);
+        }
+      } else {
+        user = {
+          id: `user-${owner.id}`,
+          name: owner.name,
+          email: owner.email,
+          role: staffData.role,
+          phone: owner.phone || staffData.phone || '',
+          documentType: owner.documentType || staffData.documentType || 'CC',
+          documentNumber: owner.documentNumber || staffData.documentNumber || '',
+          apartment: owner.apartment,
+          building: owner.building,
+          coefficient: owner.coefficient,
+          isCouncilMember: true,
+          councilRole: roleTitle,
+          isBoardMember: true,
+          boardRole: roleTitle,
+          status: 'active',
+          complexId: owner.complexId || this.complex.id,
+          createdAt: new Date().toISOString()
+        };
+        this.users.push(user);
+        this.userPasswords.set(user.email.toLowerCase(), initialPass);
+      }
+
+      // Update active assembly dignitaries if applicable
+      const activeAsm = this.assemblies.find(a => a.status === 'in_progress' || a.status === 'scheduled');
+      if (activeAsm) {
+        if (staffData.role === 'president') activeAsm.presidentName = owner.name;
+        if (staffData.role === 'secretary') activeAsm.secretaryName = owner.name;
+        if (staffData.role === 'accountant') activeAsm.accountantName = owner.name;
+        if (staffData.role === 'admin') activeAsm.administratorName = owner.name;
+      }
+
+      this.addAuditLog(
+        'user-admin',
+        'Administrador',
+        'admin',
+        'DESIGNAR_MESA_DIRECTIVA',
+        `Designación en Mesa Directiva de copropietario: ${owner.name} (${owner.apartment}) como ${roleTitle}`
+      );
+      this.notifyChange();
+
+      return {
+        user,
+        initialPassword: initialPass,
+        isExistingOwner: true,
+        message: `¡Copropietario ${owner.name} (${owner.apartment}) designado exitosamente como ${roleTitle}!`
+      };
+    }
+
+    // CASE 2: Creating an external staff member manually
     const existing = this.getUserByEmail(staffData.email);
     if (existing) {
       throw new Error(`Ya existe un usuario registrado con el correo electrónico ${staffData.email}`);
     }
 
-    if (staffData.password) {
-      assertPasswordPolicy(staffData.password);
-    }
     const id = `user-staff-${Date.now()}`;
-    const initialPass = staffData.password && staffData.password.trim().length >= 8 
-      ? staffData.password.trim() 
-      : `Voto${Math.floor(1000 + Math.random() * 9000)}!`;
-
     const newUser: User = {
       id,
       name: staffData.name,
@@ -815,6 +900,10 @@ class DataStore {
       apartment: 'Mesa Directiva',
       building: 'Administración',
       coefficient: 0,
+      isCouncilMember: true,
+      councilRole: roleTitle,
+      isBoardMember: true,
+      boardRole: roleTitle,
       status: 'active',
       complexId: this.complex.id,
       createdAt: new Date().toISOString()
@@ -828,13 +917,15 @@ class DataStore {
       'Administrador',
       'admin',
       'CREAR_ROL_DIRECTIVO',
-      `Creación de miembro directivo: ${newUser.name} como ${newUser.role}`
+      `Creación de miembro directivo externo: ${newUser.name} como ${roleTitle}`
     );
+    this.notifyChange();
 
     return {
       user: newUser,
       initialPassword: initialPass,
-      message: `Miembro directivo (${newUser.name}) creado exitosamente con el rol ${newUser.role}.`
+      isExistingOwner: false,
+      message: `Miembro directivo (${newUser.name}) creado exitosamente como ${roleTitle}.`
     };
   }
 
@@ -861,6 +952,7 @@ class DataStore {
       'ACTUALIZAR_ROL_DIRECTIVO',
       `Actualización de datos del usuario directivo ${this.users[idx].name}`
     );
+    this.notifyChange();
 
     return this.users[idx];
   }
@@ -872,6 +964,35 @@ class DataStore {
       throw new Error('No es posible eliminar al Administrador Principal del conjunto.');
     }
 
+    // Check if user is also an owner in the census
+    const owner = this.owners.find(
+      (o) => 
+        userToDelete.id === `user-${o.id}` || 
+        (o.email && o.email.toLowerCase() === userToDelete.email.toLowerCase()) ||
+        (o.documentNumber && o.documentNumber === userToDelete.documentNumber)
+    );
+
+    if (owner) {
+      // Do NOT delete the owner! Just revoke the council / board role
+      owner.isCouncilMember = false;
+      owner.councilRole = undefined;
+      userToDelete.role = 'owner';
+      userToDelete.isCouncilMember = false;
+      userToDelete.councilRole = undefined;
+      userToDelete.isBoardMember = false;
+      userToDelete.boardRole = undefined;
+
+      this.addAuditLog(
+        'user-admin',
+        'Administrador',
+        'admin',
+        'REVOCAR_ROL_DIRECTIVO',
+        `Revocación de cargo directivo a ${userToDelete.name} (${owner.apartment}). Continúa activo como copropietario.`
+      );
+      this.notifyChange();
+      return { success: true, revoked: true, message: `Se revocó el cargo de mesa directiva a ${userToDelete.name}. Permanece como copropietario.` };
+    }
+
     this.users = this.users.filter(u => u.id !== id);
     this.addAuditLog(
       'user-admin',
@@ -880,7 +1001,8 @@ class DataStore {
       'ELIMINAR_ROL_DIRECTIVO',
       `Eliminación de miembro directivo: ${userToDelete.name} (${userToDelete.role})`
     );
-    return { success: true };
+    this.notifyChange();
+    return { success: true, deleted: true };
   }
 
   // Profile Management & Password Change
@@ -1518,16 +1640,85 @@ class DataStore {
 
   // Quorum & Check-in
   getQuorumByAssembly(assemblyId: string) {
+    const assembly = this.assemblies.find((a) => a.id === assemblyId);
+    const targetComplexId = assembly?.complexId || this.complex.id;
+    const complexOwners = this.getOwners(targetComplexId).filter((o) => o.status === 'active');
+
+    // Ensure all active registered owners of this complex exist in the quorum list
+    const existingMap = new Map<string, QuorumAttendance>();
+    this.quorum
+      .filter((q) => q.assemblyId === assemblyId)
+      .forEach((q) => existingMap.set(q.ownerId, q));
+
+    let addedAny = false;
+    complexOwners.forEach((o) => {
+      let qItem = existingMap.get(o.id);
+      if (!qItem) {
+        qItem = {
+          id: `quorum-${assemblyId}-${o.id}`,
+          assemblyId,
+          ownerId: o.id,
+          ownerName: o.name,
+          apartment: o.apartment,
+          building: o.building,
+          coefficient: o.coefficient,
+          checkedIn: false,
+          isCouncilMember: !!o.isCouncilMember,
+          councilRole: o.councilRole
+        };
+        this.quorum.push(qItem);
+        existingMap.set(o.id, qItem);
+        addedAny = true;
+      } else {
+        // keep council/board data in sync
+        qItem.isCouncilMember = !!o.isCouncilMember;
+        qItem.councilRole = o.councilRole;
+        qItem.ownerName = o.name;
+        qItem.apartment = o.apartment;
+        qItem.building = o.building;
+        qItem.coefficient = o.coefficient;
+      }
+    });
+
+    if (assembly && assembly.totalOwnersInvited !== complexOwners.length) {
+      assembly.totalOwnersInvited = complexOwners.length;
+    }
+
+    if (addedAny) {
+      this.notifyChange();
+    }
+
     return this.quorum.filter((q) => q.assemblyId === assemblyId);
   }
 
   toggleQuorumCheckIn(assemblyId: string, ownerId: string, checkedIn: boolean, verifiedBy: string = 'Administración') {
-    const item = this.quorum.find((q) => q.assemblyId === assemblyId && q.ownerId === ownerId);
-    if (!item) return null;
-
-    item.checkedIn = checkedIn;
-    item.checkedInAt = checkedIn ? new Date().toISOString() : undefined;
-    item.verifiedBy = checkedIn ? verifiedBy : undefined;
+    let item = this.quorum.find((q) => q.assemblyId === assemblyId && q.ownerId === ownerId);
+    if (!item) {
+      const owner = this.owners.find((o) => o.id === ownerId || `user-${o.id}` === ownerId);
+      if (owner) {
+        item = {
+          id: `quorum-${assemblyId}-${owner.id}`,
+          assemblyId,
+          ownerId: owner.id,
+          ownerName: owner.name,
+          apartment: owner.apartment,
+          building: owner.building,
+          coefficient: owner.coefficient,
+          checkedIn,
+          checkedInAt: checkedIn ? new Date().toISOString() : undefined,
+          verifiedBy: checkedIn ? verifiedBy : undefined,
+          isCouncilMember: !!owner.isCouncilMember,
+          councilRole: owner.councilRole
+        };
+        this.quorum.push(item);
+      } else {
+        return null;
+      }
+    } else {
+      item.checkedIn = checkedIn;
+      item.checkedInAt = checkedIn ? new Date().toISOString() : undefined;
+      item.verifiedBy = checkedIn ? verifiedBy : undefined;
+    }
 
     // Recalculate represented quorum
     const assemblyQuorum = this.quorum.filter((q) => q.assemblyId === assemblyId && q.checkedIn);
@@ -1538,6 +1729,7 @@ class DataStore {
     if (assembly) {
       assembly.representedQuorum = Number(totalRepresented.toFixed(4));
       assembly.checkedInOwnersCount = count;
+      assembly.totalOwnersInvited = this.getOwners(assembly.complexId).length;
     }
 
     this.addAuditLog(
@@ -1550,6 +1742,37 @@ class DataStore {
 
     this.notifyChange();
     return { item, representedQuorum: totalRepresented, checkedInCount: count };
+  }
+
+  // Automatic Quórum Attendance Registration on login or voting
+  autoCheckInForActiveAssemblies(ownerIdentifier: string, source: string = 'Ingreso a Plataforma') {
+    let owner = this.owners.find((o) => 
+      o.id === ownerIdentifier || 
+      `user-${o.id}` === ownerIdentifier ||
+      (o.email && o.email.toLowerCase() === ownerIdentifier.toLowerCase()) ||
+      (o.documentNumber && o.documentNumber === ownerIdentifier)
+    );
+    if (!owner) {
+      const user = this.getUserByEmail(ownerIdentifier) || this.getUserByDocument(ownerIdentifier);
+      if (user) {
+        owner = this.owners.find((o) => 
+          (user.documentNumber && o.documentNumber === user.documentNumber) ||
+          (user.email && o.email.toLowerCase() === user.email.toLowerCase())
+        );
+      }
+    }
+    if (!owner) return;
+
+    // Find all active or scheduled assemblies of this owner's complex
+    const targetAssemblies = this.assemblies.filter((a) => 
+      (a.complexId === owner!.complexId || a.complexId === this.complex.id) &&
+      a.status !== 'finished' && 
+      a.status !== 'cancelled'
+    );
+
+    targetAssemblies.forEach((asm) => {
+      this.toggleQuorumCheckIn(asm.id, owner!.id, true, source);
+    });
   }
 
   // Documents
@@ -1985,6 +2208,17 @@ class DataStore {
       `Voto registrado en "${vote.title}" por ${effectiveApto} (Comprobante: ${receiptCode})`
     );
 
+    // 5. Automatic Quórum Attendance Registration on voting
+    // "el quorum apenas vote cualquier propietario inicie sesión debe registrarse automáticamente al quorum de asistencia"
+    try {
+      const ownerId = owner?.id || (voterUserId.startsWith('user-owner-') ? voterUserId.replace('user-', '') : voterUserId);
+      if (vote.assemblyId && ownerId) {
+        this.toggleQuorumCheckIn(vote.assemblyId, ownerId, true, 'Voto Oficial Registrado en Vivo');
+      }
+    } catch (e) {
+      // already registered
+    }
+
     this.notifyChange();
 
     return {
@@ -2162,9 +2396,11 @@ class DataStore {
 
   sendAssemblyResultsEmails(
     assemblyId: string,
-    recipientsType: 'all' | 'attended' | 'voted',
+    recipientsType: 'all' | 'attended' | 'voted' | 'specific',
     subject: string,
-    messageBody?: string
+    messageBody?: string,
+    selectedOwnerIds?: string[],
+    attachment?: { name: string; size?: string; dataUri?: string }
   ) {
     const assembly = this.assemblies.find((a) => a.id === assemblyId);
     if (!assembly) throw new Error('Asamblea no encontrada');
@@ -2185,10 +2421,15 @@ class DataStore {
       targetOwners = complexOwners.filter(
         (o) => votedIds.has(o.id) || votedIds.has(`user-${o.id}`) || votedDocs.has(o.documentNumber)
       );
+    } else if (recipientsType === 'specific') {
+      const targetIdSet = new Set(selectedOwnerIds || []);
+      targetOwners = complexOwners.filter((o) => targetIdSet.has(o.id));
     }
 
     const sentCount = targetOwners.length;
     const timestamp = new Date().toISOString();
+    const attachName = attachment?.name || `Acta_Resultados_${assembly.date || 'Oficial'}_${this.complex.name.replace(/\s+/g, '_')}.pdf`;
+    const attachSize = attachment?.size || '198 KB';
 
     targetOwners.forEach((owner) => {
       this.emailLogs.unshift({
@@ -2199,7 +2440,11 @@ class DataStore {
         subject: subject || `[VotoSmart] Resultados Oficiales y Escrutinio - ${assembly.title}`,
         type: 'resultados',
         status: 'sent',
-        sentAt: timestamp
+        sentAt: timestamp,
+        attachmentName: attachName,
+        attachmentSize: attachSize,
+        attachmentDataUri: attachment?.dataUri,
+        messageBody: messageBody
       });
     });
 
@@ -2208,16 +2453,19 @@ class DataStore {
       'Carolina Méndez',
       'admin',
       'ENVÍO_CORREOS_RESULTADOS',
-      `Envío de resultados oficiales por correo electrónico a ${sentCount} copropietarios de ${this.complex.name} (${recipientsType === 'all' ? '100% del censo' : recipientsType === 'attended' ? 'asistentes' : 'votantes'}).`
+      `Envío de resultados oficiales por correo electrónico con PDF oficial adjunto ("${attachName}") a ${sentCount} copropietarios de ${this.complex.name} (${recipientsType === 'all' ? '100% del censo' : recipientsType === 'attended' ? 'asistentes' : recipientsType === 'specific' ? 'destinatarios específicos seleccionados' : 'votantes'}).`
     );
-    return { success: true, sentCount, total: complexOwners.length, target: recipientsType, recipients: targetOwners };
+    this.notifyChange();
+    return { success: true, sentCount, total: complexOwners.length, target: recipientsType, recipients: targetOwners, attachment: { name: attachName, size: attachSize } };
   }
 
   sendAssemblyMinutesEmails(
     assemblyId: string,
-    recipientsType: 'all' | 'attended' | 'voted',
+    recipientsType: 'all' | 'attended' | 'voted' | 'specific',
     subject: string,
-    messageBody?: string
+    messageBody?: string,
+    selectedOwnerIds?: string[],
+    attachment?: { name: string; size?: string; dataUri?: string }
   ) {
     const assembly = this.assemblies.find((a) => a.id === assemblyId);
     if (!assembly) throw new Error('Asamblea no encontrada');
@@ -2238,10 +2486,15 @@ class DataStore {
       targetOwners = complexOwners.filter(
         (o) => votedIds.has(o.id) || votedIds.has(`user-${o.id}`) || votedDocs.has(o.documentNumber)
       );
+    } else if (recipientsType === 'specific') {
+      const targetIdSet = new Set(selectedOwnerIds || []);
+      targetOwners = complexOwners.filter((o) => targetIdSet.has(o.id));
     }
 
     const sentCount = targetOwners.length;
     const timestamp = new Date().toISOString();
+    const attachName = attachment?.name || `Acta_Oficial_Asamblea_${assembly.date || 'Oficial'}_${this.complex.name.replace(/\s+/g, '_')}.pdf`;
+    const attachSize = attachment?.size || '218 KB';
 
     targetOwners.forEach((owner) => {
       this.emailLogs.unshift({
@@ -2252,7 +2505,11 @@ class DataStore {
         subject: subject || `[VotoSmart] Acta Oficial y Decisiones Aprobadas - ${assembly.title}`,
         type: 'acta',
         status: 'sent',
-        sentAt: timestamp
+        sentAt: timestamp,
+        attachmentName: attachName,
+        attachmentSize: attachSize,
+        attachmentDataUri: attachment?.dataUri,
+        messageBody: messageBody
       });
     });
 
@@ -2261,9 +2518,10 @@ class DataStore {
       'Carolina Méndez',
       'admin',
       'ENVÍO_CORREOS_ACTA',
-      `Envío de Acta Oficial aprobada a ${sentCount} copropietarios (${recipientsType === 'all' ? '100% del censo' : 'asistentes'}).`
+      `Envío de Acta Oficial aprobada con PDF adjunto ("${attachName}") a ${sentCount} copropietarios (${recipientsType === 'all' ? '100% del censo' : recipientsType === 'specific' ? 'destinatarios específicos' : 'asistentes'}).`
     );
-    return { success: true, sentCount, total: complexOwners.length, target: recipientsType, recipients: targetOwners };
+    this.notifyChange();
+    return { success: true, sentCount, total: complexOwners.length, target: recipientsType, recipients: targetOwners, attachment: { name: attachName, size: attachSize } };
   }
 
   // Audit Logs - Isolated by Complex

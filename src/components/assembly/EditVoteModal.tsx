@@ -81,6 +81,12 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
   const [candPdfData, setCandPdfData] = useState<{ url: string; name: string } | null>(null);
   const [isUploadingCandPdf, setIsUploadingCandPdf] = useState(false);
 
+  // Owners list & candidate selection helpers
+  const [ownersList, setOwnersList] = useState<Owner[]>(registeredOwners);
+  const [selectedOwnerId, setSelectedOwnerId] = useState('');
+  const [ownerSearchQuery, setOwnerSearchQuery] = useState('');
+  const [allowCandidateEditOverride, setAllowCandidateEditOverride] = useState(false);
+
   // General Vote PDF Attachment
   const [attachmentPdfUrl, setAttachmentPdfUrl] = useState<string | undefined>(vote.attachmentPdfUrl);
   const [attachmentPdfName, setAttachmentPdfName] = useState<string | undefined>(vote.attachmentPdfName);
@@ -92,7 +98,20 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Available Towers for selection
-  const availableTowers = Array.from(new Set(registeredOwners.map((o) => o.building).filter(Boolean)));
+  const availableTowers = Array.from(new Set(ownersList.map((o) => o.building).filter(Boolean)));
+
+  // Sync ownersList if empty or missing documentNumber
+  useEffect(() => {
+    if (registeredOwners && registeredOwners.length > 0 && registeredOwners.some(o => !!o.documentNumber)) {
+      setOwnersList(registeredOwners);
+    } else {
+      api.getOwners().then((list) => {
+        if (list && list.length > 0) {
+          setOwnersList(list);
+        }
+      }).catch(console.error);
+    }
+  }, [registeredOwners, isOpen]);
 
   // Sync state when vote prop changes
   useEffect(() => {
@@ -112,12 +131,15 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
       setOptions(vote.options || []);
       setAttachmentPdfUrl(vote.attachmentPdfUrl);
       setAttachmentPdfName(vote.attachmentPdfName);
+      setSelectedOwnerId('');
+      setOwnerSearchQuery('');
       setError(null);
       setSuccessMessage(null);
     }
   }, [vote, isOpen]);
 
-  const canEditOptions = vote.status === 'scheduled';
+  const canEditCandidates = vote.status === 'scheduled' || vote.status === 'active' || allowCandidateEditOverride;
+  const canEditOptions = vote.status === 'scheduled' || allowCandidateEditOverride;
 
   // Handle PDF Upload for Candidate
   const handleCandPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,7 +183,7 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
 
   const handleAddCandidate = () => {
     if (!candName.trim()) {
-      alert('Por favor ingrese el nombre del candidato.');
+      alert('Por favor ingrese el nombre del candidato o selecciónelo del censo de propietarios.');
       return;
     }
 
@@ -176,14 +198,15 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
         complexName
       );
 
+    const newCandidateId = `cand-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newCandidate: Candidate = {
-      id: `cand-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      id: newCandidateId,
       voteId: vote.id,
       name: candName.trim(),
       documentNumber: candDoc.trim() || 'CC Verificada',
       apartment: candApto.trim() || 'Apto Propio',
       building: candBuilding.trim() || 'Torre Principal',
-      rolePostulation: candRole.trim() || 'Consejo de Administración',
+      rolePostulation: candRole.trim() || 'Consejo de Administración (Principal)',
       profileSummary: proposalText,
       proposals: proposalText,
       proposalPdfUrl: finalPdfUrl,
@@ -196,16 +219,18 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
 
     // Also update options list with candidate
     setOptions((prev) => [
-      ...prev.filter((o) => o.id !== `opt-${newCandidate.id}`),
+      ...prev.filter((o) => o.candidateId !== newCandidateId && o.id !== `opt-${newCandidateId}`),
       {
-        id: `opt-${newCandidate.id}`,
+        id: `opt-${newCandidateId}`,
         label: `${newCandidate.name} (${newCandidate.apartment}) - ${newCandidate.rolePostulation}`,
         description: newCandidate.profileSummary,
-        candidateId: newCandidate.id
+        candidateId: newCandidateId
       }
     ]);
 
     // Reset candidate subform
+    setSelectedOwnerId('');
+    setOwnerSearchQuery('');
     setCandName('');
     setCandDoc('');
     setCandApto('');
@@ -216,10 +241,11 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
 
   const handleRemoveCandidate = (id: string) => {
     setCandidatesList((prev) => prev.filter((c) => c.id !== id));
-    setOptions((prev) => prev.filter((o) => o.candidateId !== id));
+    setOptions((prev) => prev.filter((o) => o.candidateId !== id && o.id !== `opt-${id}`));
   };
 
   const handleOwnerSelect = (ownerId: string) => {
+    setSelectedOwnerId(ownerId);
     if (!ownerId) {
       setCandName('');
       setCandDoc('');
@@ -227,12 +253,15 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
       setCandBuilding('');
       return;
     }
-    const found = registeredOwners.find((o) => o.id === ownerId);
+    const found = ownersList.find((o) => o.id === ownerId);
     if (found) {
       setCandName(found.name);
-      setCandDoc(found.documentNumber);
+      setCandDoc(found.documentNumber || '');
       setCandApto(found.apartment);
       setCandBuilding(found.building || 'Torre Principal');
+      if (found.isCouncilMember && found.councilRole) {
+        setCandRole(found.councilRole);
+      }
     }
   };
 
@@ -245,6 +274,17 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
 
     setIsLoading(true);
     setError(null);
+
+    // Compute synchronous final options matching current candidate list
+    const finalOptions: VoteOption[] = vote.type === 'candidate_election'
+      ? candidatesList.map((c) => ({
+          id: `opt-${c.id}`,
+          label: `${c.name} (${c.apartment}) - ${c.rolePostulation || 'Candidato'}`,
+          description: c.profileSummary,
+          candidateId: c.id
+        }))
+      : (canEditOptions ? options : vote.options);
+
     try {
       await api.updateVote(vote.id, {
         title: title.trim(),
@@ -256,7 +296,7 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
         allowAbstain,
         maxSelections: vote.type === 'multiple_choice' || vote.type === 'candidate_election' ? maxSelections : 1,
         candidates: vote.type === 'candidate_election' ? candidatesList : vote.candidates,
-        options: canEditOptions ? options : vote.options,
+        options: finalOptions,
         attachmentPdfUrl,
         attachmentPdfName,
         filterConfig: {
@@ -276,7 +316,7 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
         }
       });
 
-      setSuccessMessage('¡Votación actualizada exitosamente!');
+      setSuccessMessage('¡Votación y candidatos actualizados exitosamente!');
       setTimeout(() => {
         onVoteUpdated();
         onClose();
@@ -534,14 +574,14 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
                       </div>
                     </div>
 
-                    {canEditOptions && (
+                    {canEditCandidates && (
                       <button
                         type="button"
                         onClick={() => handleRemoveCandidate(c.id)}
-                        className="p-1 text-rose-500 hover:text-rose-700"
+                        className="p-1 text-rose-500 hover:text-rose-700 text-xs font-bold"
                         title="Eliminar candidato"
                       >
-                        ✕
+                        ✕ Quitar
                       </button>
                     )}
                   </div>
@@ -549,78 +589,144 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
               )}
             </div>
 
-            {/* Add Candidate Form (only if scheduled) */}
-            {canEditOptions && (
-              <div className="p-3.5 bg-teal-50/50 border border-teal-200 rounded-xl space-y-2.5">
-                <p className="font-bold text-teal-900 text-xs flex items-center gap-1.5">
-                  <Plus className="w-3.5 h-3.5 text-teal-700" /> Postular / Agregar Nuevo Candidato
-                </p>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Seleccionar desde Censo:</label>
-                  <select
-                    onChange={(e) => handleOwnerSelect(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white font-medium"
-                  >
-                    <option value="">-- Autocompletar con copropietario --</option>
-                    {registeredOwners.map((owner) => (
-                      <option key={owner.id} value={owner.id}>
-                        CC {owner.documentNumber} - {owner.name} ({owner.apartment} {owner.building})
-                      </option>
-                    ))}
-                  </select>
+            {/* Add Candidate Form (enabled for scheduled or active votes) */}
+            {canEditCandidates ? (
+              <div className="p-4 bg-teal-50/70 border-2 border-teal-300 rounded-2xl space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="font-extrabold text-teal-950 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                    <Plus className="w-4 h-4 text-teal-700" /> Postular / Agregar Nuevo Candidato
+                  </p>
+                  {vote.status === 'active' && (
+                    <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                      Votación Activa (Sincronización en vivo)
+                    </span>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={candName}
-                    onChange={(e) => setCandName(e.target.value)}
-                    placeholder="Nombre Completo *"
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white"
-                  />
-                  <input
-                    type="text"
-                    value={candDoc}
-                    onChange={(e) => setCandDoc(e.target.value)}
-                    placeholder="Número de Cédula"
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white"
-                  />
-                  <input
-                    type="text"
-                    value={candApto}
-                    onChange={(e) => setCandApto(e.target.value)}
-                    placeholder="Apto / Casa"
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white"
-                  />
-                  <select
-                    value={candRole}
-                    onChange={(e) => setCandRole(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white font-medium"
-                  >
-                    <option value="Consejo de Administración (Principal)">Consejo de Administración (Principal)</option>
-                    <option value="Consejo de Administración (Suplente)">Consejo de Administración (Suplente)</option>
-                    <option value="Comité de Convivencia">Comité de Convivencia</option>
-                    <option value="Revisor Fiscal">Revisor Fiscal</option>
-                    <option value="Comité de Obras y Mejoras">Comité de Obras y Mejoras</option>
-                  </select>
+                {/* Census Owner Selection & Live Filter */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-slate-800 text-xs flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-teal-600" />
+                      Seleccionar Copropietario desde el Censo ({ownersList.length} registrados):
+                    </label>
+                    {selectedOwnerId && (
+                      <button
+                        type="button"
+                        onClick={() => handleOwnerSelect('')}
+                        className="text-[10px] text-rose-600 hover:underline font-bold"
+                      >
+                        Limpiar selección
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Filtrar por nombre, cédula o apto..."
+                      value={ownerSearchQuery}
+                      onChange={(e) => setOwnerSearchQuery(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500"
+                    />
+
+                    <select
+                      value={selectedOwnerId}
+                      onChange={(e) => handleOwnerSelect(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border-2 border-teal-400 text-xs text-slate-900 bg-white font-bold focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="">-- Elige un copropietario del censo --</option>
+                      {ownersList
+                        .filter((o) => {
+                          if (!ownerSearchQuery.trim()) return true;
+                          const q = ownerSearchQuery.toLowerCase();
+                          return (
+                            o.name.toLowerCase().includes(q) ||
+                            (o.documentNumber && o.documentNumber.includes(q)) ||
+                            o.apartment.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((owner) => {
+                          const isAlreadyCand = candidatesList.some(
+                            (c) => (c.documentNumber && c.documentNumber === owner.documentNumber) || c.name.toLowerCase() === owner.name.toLowerCase()
+                          );
+                          return (
+                            <option key={owner.id} value={owner.id}>
+                              {owner.apartment} ({owner.building || 'Torre 1'}) — {owner.name} {owner.documentNumber ? `[CC: ${owner.documentNumber}]` : ''} {isAlreadyCand ? '⚠️ (Ya postulado)' : ''}
+                            </option>
+                          );
+                        })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Candidate Manual/Autofilled Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Nombre del Candidato *</label>
+                    <input
+                      type="text"
+                      value={candName}
+                      onChange={(e) => setCandName(e.target.value)}
+                      placeholder="Nombre Completo *"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Documento de Identidad</label>
+                    <input
+                      type="text"
+                      value={candDoc}
+                      onChange={(e) => setCandDoc(e.target.value)}
+                      placeholder="Número de Cédula"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-mono focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Inmueble / Apto</label>
+                    <input
+                      type="text"
+                      value={candApto}
+                      onChange={(e) => setCandApto(e.target.value)}
+                      placeholder="Apto / Casa"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Cargo al que se Postula</label>
+                    <select
+                      value={candRole}
+                      onChange={(e) => setCandRole(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="Consejo de Administración (Principal)">Consejo de Administración (Principal)</option>
+                      <option value="Consejo de Administración (Suplente)">Consejo de Administración (Suplente)</option>
+                      <option value="Comité de Convivencia">Comité de Convivencia</option>
+                      <option value="Revisor Fiscal">Revisor Fiscal</option>
+                      <option value="Comité de Obras y Mejoras">Comité de Obras y Mejoras</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Propuestas y Plan de Trabajo</label>
                   <textarea
                     rows={2}
                     value={candProposal}
                     onChange={(e) => setCandProposal(e.target.value)}
-                    placeholder="Propuestas y plan de trabajo del candidato..."
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-900 bg-white resize-none"
+                    placeholder="Resumen de propuestas y compromisos para la copropiedad..."
+                    className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white resize-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
 
-                {/* PDF proposal upload */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-[11px] font-bold text-slate-700">
-                    <Upload className="w-3 h-3 text-teal-600" />
-                    {candPdfData ? candPdfData.name : 'Adjuntar PDF con Propuestas'}
+                {/* PDF proposal upload & Add button */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-teal-200">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-300 bg-white hover:bg-teal-50 text-[11px] font-bold text-teal-800 shadow-2xs">
+                    <Upload className="w-3.5 h-3.5 text-teal-600" />
+                    {candPdfData ? candPdfData.name : 'Adjuntar Hoja de Vida / Propuesta (PDF)'}
                     <input type="file" accept="application/pdf" onChange={handleCandPdfUpload} className="hidden" />
                   </label>
 
@@ -629,12 +735,23 @@ export const EditVoteModal: React.FC<EditVoteModalProps> = ({
                     variant="primary"
                     size="sm"
                     onClick={handleAddCandidate}
-                    leftIcon={<Plus className="w-3.5 h-3.5" />}
-                    className="bg-teal-600 hover:bg-teal-700"
+                    leftIcon={<Plus className="w-4 h-4" />}
+                    className="bg-teal-600 hover:bg-teal-700 font-bold shadow-xs"
                   >
-                    Agregar Candidato
+                    Agregar a la Lista de Candidatos
                   </Button>
                 </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-100 rounded-xl text-center text-xs text-slate-500 flex items-center justify-between">
+                <span>La votación está cerrada para edición directa.</span>
+                <button
+                  type="button"
+                  onClick={() => setAllowCandidateEditOverride(true)}
+                  className="text-teal-700 font-bold hover:underline"
+                >
+                  Habilitar edición de candidatos
+                </button>
               </div>
             )}
           </div>

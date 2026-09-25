@@ -8,10 +8,17 @@ import { Alert, Badge, Button, Modal } from './UIComponents';
 interface ComplexSwitcherModalProps {
   isOpen: boolean;
   onClose: () => void;
+  allowManage?: boolean;
 }
 
-export const ComplexSwitcherModal: React.FC<ComplexSwitcherModalProps> = ({ isOpen, onClose }) => {
-  const { complex, complexes, switchComplex, refreshComplex } = useAuth();
+export const ComplexSwitcherModal: React.FC<ComplexSwitcherModalProps> = ({
+  isOpen,
+  onClose,
+  allowManage
+}) => {
+  const { user, complex, complexes, switchComplex, refreshComplex } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const canManage = allowManage ?? isAdmin;
   const [mode, setMode] = useState<'list' | 'edit' | 'create'>('list');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,25 +178,37 @@ export const ComplexSwitcherModal: React.FC<ComplexSwitcherModalProps> = ({ isOp
             })}
           </div>
 
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenEdit}
-              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-            >
-              Editar Conjunto Activo
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleOpenCreate}
-              leftIcon={<Plus className="w-3.5 h-3.5" />}
-              className="bg-teal-600 hover:bg-teal-700 font-bold"
-            >
-              Crear Nuevo Conjunto
-            </Button>
-          </div>
+          {canManage ? (
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenEdit}
+                leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+              >
+                Editar Conjunto Activo
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenCreate}
+                leftIcon={<Plus className="w-3.5 h-3.5" />}
+                className="bg-teal-600 hover:bg-teal-700 font-bold"
+              >
+                Crear Nuevo Conjunto
+              </Button>
+            </div>
+          ) : (
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                La creación de nuevos conjuntos está reservada a la administración.
+              </span>
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                Cerrar
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

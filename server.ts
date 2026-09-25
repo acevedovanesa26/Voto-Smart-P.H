@@ -890,17 +890,20 @@ app.get('/api/assemblies/:id/emails', (req, res) => {
 
 app.post('/api/assemblies/:id/send-results', async (req, res) => {
   try {
-    const { recipientsType, subject, messageBody } = req.body;
+    const { recipientsType, subject, messageBody, selectedOwnerIds, attachment } = req.body;
     const result = store.sendAssemblyResultsEmails(
       req.params.id,
       recipientsType || 'all',
       subject || 'Resultados Oficiales de la Asamblea',
-      messageBody
+      messageBody,
+      selectedOwnerIds,
+      attachment
     );
 
     const assembly = store.getAssemblyById(req.params.id);
     const votes = store.getVotesByAssembly(req.params.id);
     const complex = store.getComplex();
+    const attachName = attachment?.name || result.attachment?.name || `Acta_Resultados_${assembly?.title || 'Asamblea'}.pdf`;
 
     // Trigger batch email dispatching in background
     if (result.recipients && result.recipients.length > 0) {
@@ -921,6 +924,10 @@ app.post('/api/assemblies/:id/send-results', async (req, res) => {
               <p style="margin:0; font-weight:bold; color:#0f766e;">Total votaciones computadas: ${votes.length}</p>
               <p style="margin:4px 0 0; font-size:12px; color:#64748b;">Quórum alcanzado: ${assembly?.representedQuorum || 0}%</p>
             </div>
+            <div style="margin: 16px 0; padding: 14px 18px; background: #f8fafc; border: 1.5px solid #0d9488; border-radius: 10px;">
+              <p style="margin: 0; font-weight: bold; color: #0f766e; font-size: 13px;">📎 Documento Adjunto (PDF)</p>
+              <p style="margin: 4px 0 0; font-size: 12px; color: #334155;"><strong>${attachName}</strong> • Certificado oficial conforme a Ley 675 de 2001</p>
+            </div>
             <p style="font-size:12px; color:#94a3b8; text-align:center;">Generado conforme a la Ley 675 de 2001 por VotoSmart Colombia.</p>
           </div>
         `,
@@ -936,16 +943,19 @@ app.post('/api/assemblies/:id/send-results', async (req, res) => {
 
 app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
   try {
-    const { recipientsType, subject, messageBody } = req.body;
+    const { recipientsType, subject, messageBody, selectedOwnerIds, attachment } = req.body;
     const result = store.sendAssemblyMinutesEmails(
       req.params.id,
       recipientsType || 'all',
       subject || 'Acta Oficial Aprobada de la Asamblea',
-      messageBody
+      messageBody,
+      selectedOwnerIds,
+      attachment
     );
 
     const assembly = store.getAssemblyById(req.params.id);
     const complex = store.getComplex();
+    const attachName = attachment?.name || result.attachment?.name || `Acta_Oficial_${assembly?.title || 'Asamblea'}.pdf`;
 
     // Trigger batch email dispatching in background
     if (result.recipients && result.recipients.length > 0) {
@@ -962,6 +972,10 @@ app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
             <p>Estimado(a) <strong>${r.name}</strong>,</p>
             <p>Se adjunta el acta formal con el registro de decisiones aprobadas para: <strong>${assembly?.title || 'Asamblea'}</strong>.</p>
             ${messageBody ? `<div style="background:#f8fafc; padding:12px; border-left:4px solid #0f766e; margin:16px 0;">${messageBody}</div>` : ''}
+            <div style="margin: 16px 0; padding: 14px 18px; background: #f8fafc; border: 1.5px solid #0d9488; border-radius: 10px;">
+              <p style="margin: 0; font-weight: bold; color: #0f766e; font-size: 13px;">📎 Documento Adjunto (PDF)</p>
+              <p style="margin: 4px 0 0; font-size: 12px; color: #334155;"><strong>${attachName}</strong> • Acta firmada y radicada Ley 675</p>
+            </div>
             <p style="font-size:12px; color:#94a3b8; text-align:center;">Generado conforme a la Ley 675 de 2001 por VotoSmart Colombia.</p>
           </div>
         `,

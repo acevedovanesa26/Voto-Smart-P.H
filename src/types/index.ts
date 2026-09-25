@@ -20,6 +20,10 @@ export interface User {
   coefficient?: number; // e.g. 7.25%
   status: 'active' | 'inactive';
   complexId: string;
+  isCouncilMember?: boolean;
+  councilRole?: string;
+  isBoardMember?: boolean;
+  boardRole?: string;
   createdAt: string;
 }
 
@@ -95,6 +99,8 @@ export interface QuorumAttendance {
   checkedInAt?: string;
   verifiedBy?: string;
   notes?: string;
+  isCouncilMember?: boolean;
+  councilRole?: string;
 }
 
 export interface AssemblyDocument {
@@ -277,6 +283,10 @@ export interface EmailLog {
   status: 'sent' | 'failed' | 'simulated';
   sentAt: string;
   errorMessage?: string;
+  attachmentName?: string;
+  attachmentSize?: string;
+  attachmentDataUri?: string;
+  messageBody?: string;
 }
 
 export interface AuthResponse {
