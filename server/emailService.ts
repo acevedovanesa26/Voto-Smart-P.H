@@ -3,6 +3,13 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import { saveEmailConfig, loadEmailConfig } from './db';
 
+export interface EmailAttachment {
+  filename: string;
+  content: string | Buffer;
+  contentType?: string;
+  cid?: string;
+}
+
 export interface SendEmailOptions {
   to: string;
   toName?: string;
@@ -11,6 +18,7 @@ export interface SendEmailOptions {
   text?: string;
   type: 'password_reset' | 'voter_otp' | 'staff_credentials' | 'invitacion' | 'convocatoria' | 'acta' | 'resultados';
   code?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailRecord {
@@ -144,7 +152,8 @@ async function sendViaBrevoApi(
   toName: string,
   subject: string,
   html: string,
-  text: string
+  text: string,
+  attachments?: EmailAttachment[]
 ): Promise<{ success: boolean; messageId: string; error?: string; rawError?: any; status?: number }> {
   const cleanKey = sanitizeApiKey(apiKey);
   const cleanSender = extractPureEmail(senderInput) || 'motatovanesa@gmail.com';
@@ -153,6 +162,41 @@ async function sendViaBrevoApi(
   const cleanToDisplayName = (toName || '').replace(/["']/g, '').trim() || cleanToEmail;
 
   try {
+    const brevoPayload: any = {
+      sender: {
+        name: senderDisplayName,
+        email: cleanSender
+      },
+      to: [
+        {
+          email: cleanToEmail,
+          name: cleanToDisplayName
+        }
+      ],
+      replyTo: {
+        email: cleanSender,
+        name: senderDisplayName
+      },
+      subject: subject,
+      htmlContent: html,
+      textContent: text
+    };
+
+    if (attachments && attachments.length > 0) {
+      brevoPayload.attachment = attachments.map(att => {
+        let b64 = '';
+        if (typeof att.content === 'string') {
+          b64 = att.content.includes('base64,') ? att.content.split('base64,')[1] : att.content;
+        } else if (Buffer.isBuffer(att.content)) {
+          b64 = att.content.toString('base64');
+        }
+        return {
+          name: att.filename,
+          content: b64
+        };
+      });
+    }
+
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
@@ -161,25 +205,7 @@ async function sendViaBrevoApi(
         'content-type': 'application/json'
       },
       signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({
-        sender: {
-          name: senderDisplayName,
-          email: cleanSender
-        },
-        to: [
-          {
-            email: cleanToEmail,
-            name: cleanToDisplayName
-          }
-        ],
-        replyTo: {
-          email: cleanSender,
-          name: senderDisplayName
-        },
-        subject: subject,
-        htmlContent: html,
-        textContent: text
-      })
+      body: JSON.stringify(brevoPayload)
     });
 
     const data: any = await res.json().catch(() => ({}));
@@ -247,7 +273,8 @@ async function sendViaBrevoSmtpRelay(
   toName: string,
   subject: string,
   html: string,
-  text: string
+  text: string,
+  attachments?: EmailAttachment[]
 ): Promise<{ success: boolean; messageId: string; error?: string; portUsed?: number }> {
   // Render permits port 2525 without firewall blocks! Port 587 as secondary.
   const portsToTry = [2525, 587];
@@ -262,14 +289,26 @@ async function sendViaBrevoSmtpRelay(
     try {
       console.log(`[EmailService] Intentando Brevo SMTP Relay en puerto ${port} para ${cleanToEmail}...`);
       const transporter = createBrevoSmtpTransporter(apiKey, cleanSender, port);
-      const info = await transporter.sendMail({
+      const mailOptions: any = {
         from: `"${senderDisplayName}" <${cleanSender}>`,
         to: `"${cleanToDisplayName}" <${cleanToEmail}>`,
         replyTo: cleanSender,
         subject,
         text,
         html
-      });
+      };
+
+      if (attachments && attachments.length > 0) {
+        mailOptions.attachments = attachments.map(att => ({
+          filename: att.filename,
+          content: typeof att.content === 'string'
+            ? (att.content.includes('base64,') ? Buffer.from(att.content.split('base64,')[1], 'base64') : Buffer.from(att.content, 'base64'))
+            : att.content,
+          contentType: att.contentType || 'application/pdf'
+        }));
+      }
+
+      const info = await transporter.sendMail(mailOptions);
 
       console.log(`[EmailService] ¡Correo entregado con éxito vía Brevo SMTP Relay en puerto ${port}! (ID: ${info.messageId})`);
       return {
@@ -392,7 +431,7 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
     // If the key starts with 'xsmtpsib-', it's explicitly a Brevo SMTP key!
     if (brevoApiKey.startsWith('xsmtpsib-')) {
       console.log(`[EmailService] Detectada clave Brevo SMTP (xsmtpsib). Despachando vía SMTP Relay puerto 2525 (Render compatible)...`);
-      const smtpRes = await sendViaBrevoSmtpRelay(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText);
+      const smtpRes = await sendViaBrevoSmtpRelay(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText, options.attachments);
       if (smtpRes.success) {
         return {
           success: true,
@@ -406,7 +445,7 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
     } else {
       // Standard Brevo REST API v3 (HTTPS 443 - Recommended for Render)
       console.log(`[EmailService] Despachando vía Brevo REST API v3 (HTTPS Puerto 443) a ${cleanTo}...`);
-      const brevoResult = await sendViaBrevoApi(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText);
+      const brevoResult = await sendViaBrevoApi(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText, options.attachments);
 
       if (brevoResult.success) {
         console.log(`[EmailService] ¡Correo entregado con éxito vía Brevo API a ${cleanTo}! ID: ${brevoResult.messageId}`);
@@ -422,7 +461,7 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
       console.warn(`[EmailService] Brevo REST API falló (${brevoResult.status}): ${brevoResult.error}. Probando fallback Brevo SMTP Relay...`);
 
       // If REST API failed because the key was actually an SMTP key or had an auth mismatch, try SMTP Relay on 2525
-      const smtpRelayRes = await sendViaBrevoSmtpRelay(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText);
+      const smtpRelayRes = await sendViaBrevoSmtpRelay(brevoApiKey, brevoSender, cleanTo, cleanToName, options.subject, options.html, plainText, options.attachments);
       if (smtpRelayRes.success) {
         return {
           success: true,
@@ -444,14 +483,26 @@ export async function dispatchEmail(options: SendEmailOptions): Promise<{
       const transporter = createSmtpTransporter(port);
       const senderFrom = brevoSender || 'motatovanesa@gmail.com';
 
-      const info = await transporter.sendMail({
+      const mailOptions: any = {
         from: `"VotoSmart Colombia" <${senderFrom}>`,
         to: cleanToName ? `"${cleanToName}" <${cleanTo}>` : cleanTo,
         replyTo: senderFrom,
         subject: options.subject,
         text: plainText,
         html: options.html
-      });
+      };
+
+      if (options.attachments && options.attachments.length > 0) {
+        mailOptions.attachments = options.attachments.map(att => ({
+          filename: att.filename,
+          content: typeof att.content === 'string'
+            ? (att.content.includes('base64,') ? Buffer.from(att.content.split('base64,')[1], 'base64') : Buffer.from(att.content, 'base64'))
+            : att.content,
+          contentType: att.contentType || 'application/pdf'
+        }));
+      }
+
+      const info = await transporter.sendMail(mailOptions);
 
       const messageId = info.messageId || id;
       console.log(`[EmailService] Correo entregado exitosamente a ${cleanTo} vía SMTP puerto ${port} (ID: ${messageId})`);
@@ -699,9 +750,10 @@ export async function dispatchBatchEmails(
   recipients: Array<{ email: string; name?: string }>,
   subject: string,
   htmlGenerator: (recipient: { email: string; name?: string }) => string,
-  type: 'resultados' | 'acta' | 'convocatoria' | 'invitacion'
+  type: 'resultados' | 'acta' | 'convocatoria' | 'invitacion',
+  attachments?: EmailAttachment[]
 ): Promise<{ total: number; sent: number }> {
-  console.log(`[EmailService] Iniciando despacho masivo de ${type} a ${recipients.length} destinatarios...`);
+  console.log(`[EmailService] Iniciando despacho masivo de ${type} a ${recipients.length} destinatarios con ${attachments?.length || 0} archivo(s) adjunto(s)...`);
   let sent = 0;
 
   // Process asynchronously without blocking caller
@@ -714,7 +766,8 @@ export async function dispatchBatchEmails(
           toName: r.name || 'Copropietario',
           subject,
           html: htmlGenerator(r),
-          type
+          type,
+          attachments
         });
         sent++;
         // Small 200ms throttle between emails

@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   AlertCircle,
   Award,
   Building2,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Download,
   Edit3,
@@ -20,7 +22,9 @@ import {
   Plus,
   RotateCcw,
   Send,
+  ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   StopCircle,
   Trash2,
@@ -52,6 +56,7 @@ import { EditVoteModal } from './EditVoteModal';
 import { CreateVoteModal } from './CreateVoteModal';
 import { downloadFile, fileToBase64, createCandidateProposalPdfUri } from '../../utils/pdfHelper';
 import { PdfPreviewModal } from '../common/PdfPreviewModal';
+import { VoteQuorumModal } from './VoteQuorumModal';
 
 interface AssemblyDetailProps {
   assemblyId: string;
@@ -90,6 +95,7 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingVote, setEditingVote] = useState<Vote | null>(null);
+  const [selectedVoteForQuorum, setSelectedVoteForQuorum] = useState<Vote | null>(null);
 
   // Email Dispatch Modal Specific States
   const [sendTargetType, setSendTargetType] = useState<'all' | 'attended' | 'specific'>('all');
@@ -125,6 +131,68 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
     conclusions: '',
     observations: ''
   });
+
+  // Movable Tabs Navigation Bar State
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const [tabsScrollPos, setTabsScrollPos] = useState(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkTabsScroll = () => {
+    if (!tabsScrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = tabsScrollRef.current;
+    const maxScroll = scrollWidth - clientWidth;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft < maxScroll - 5);
+    if (maxScroll > 0) {
+      setTabsScrollPos(Math.round((scrollLeft / maxScroll) * 100));
+    }
+  };
+
+  const handleTabsScrollLeft = () => {
+    if (!tabsScrollRef.current) return;
+    tabsScrollRef.current.scrollBy({ left: -280, behavior: 'smooth' });
+    setTimeout(checkTabsScroll, 300);
+  };
+
+  const handleTabsScrollRight = () => {
+    if (!tabsScrollRef.current) return;
+    tabsScrollRef.current.scrollBy({ left: 280, behavior: 'smooth' });
+    setTimeout(checkTabsScroll, 300);
+  };
+
+  const handleTabsSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    setTabsScrollPos(val);
+    if (!tabsScrollRef.current) return;
+    const maxScroll = tabsScrollRef.current.scrollWidth - tabsScrollRef.current.clientWidth;
+    tabsScrollRef.current.scrollLeft = (val / 100) * maxScroll;
+  };
+
+  const maskAccessCodes = (text?: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/(?:código|codigo|clave|otp|pin|token|acceso)[\s:=#]*(\d{4,8})/gi, (match, code) => {
+        return match.replace(code, '•••••• [CONFIDENCIAL]');
+      })
+      .replace(/\b\d{6}\b/g, '••••••');
+  };
+
+  const handleDownloadEmailPdf = (log: EmailLog) => {
+    if (log.attachmentDataUri) {
+      const link = document.createElement('a');
+      link.href = log.attachmentDataUri;
+      link.download = log.attachmentName || `Acta_Resultados_${assembly?.title || 'Oficial'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+    const endpoint = log.type === 'acta'
+      ? `/api/assemblies/${assemblyId}/download-minutes-pdf`
+      : `/api/assemblies/${assemblyId}/download-results-pdf`;
+    window.open(endpoint, '_blank');
+  };
 
   // Load all Assembly data
   const loadData = async () => {
@@ -578,31 +646,154 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex overflow-x-auto gap-1 border-b border-slate-200 pb-px scrollbar-none">
-        {[
-          { id: 'overview', label: 'Resumen & Estado', icon: <FileText className="w-4 h-4" /> },
-          { id: 'quorum', label: `Quórum (${assembly.checkedInOwnersCount}/${assembly.totalOwnersInvited})`, icon: <Users className="w-4 h-4" /> },
-          { id: 'votes', label: `Votaciones (${votes.length})`, icon: <VoteIcon className="w-4 h-4" /> },
-          { id: 'results', label: 'Resultados Oficiales', icon: <Award className="w-4 h-4" /> },
-          { id: 'minutes', label: 'Acta Oficial & PDF', icon: <FileCheck2 className="w-4 h-4" /> },
-          { id: 'documents', label: `Documentos (${documents.length})`, icon: <Upload className="w-4 h-4" /> },
-          { id: 'notes', label: `Bitácora (${notes.length})`, icon: <Sparkles className="w-4 h-4" /> },
-          { id: 'audit', label: 'Auditoría', icon: <ShieldCheck className="w-4 h-4" /> }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
-              activeTab === tab.id
-                ? 'border-teal-600 text-teal-700 bg-teal-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+      {/* Enhanced Movable Tabs Navigation Bar */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl border-2 border-slate-200/90 shadow-sm p-3 sticky top-16 z-20 space-y-2.5 transition-all">
+        {/* Top Control Bar: Active Tab indicator + Quick Dropdown + Arrow Scroll Controls */}
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold hidden sm:inline">Pestaña:</span>
+            <span className="text-sm font-extrabold text-teal-800 flex items-center gap-1.5">
+              {activeTab === 'overview' && <FileText className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'quorum' && <Users className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'votes' && <VoteIcon className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'results' && <Award className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'minutes' && <FileCheck2 className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'documents' && <Upload className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'notes' && <Sparkles className="w-4 h-4 text-teal-600 inline" />}
+              {activeTab === 'audit' && <ShieldCheck className="w-4 h-4 text-teal-600 inline" />}
+              <span>
+                {activeTab === 'overview' && 'Resumen & Estado General'}
+                {activeTab === 'quorum' && `Quórum Legal (${assembly.representedQuorum}%)`}
+                {activeTab === 'votes' && `Votaciones (${votes.length})`}
+                {activeTab === 'results' && 'Resultados Oficiales & Escrutinio'}
+                {activeTab === 'minutes' && 'Acta Oficial & Certificado PDF'}
+                {activeTab === 'documents' && `Documentos (${documents.length})`}
+                {activeTab === 'notes' && `Bitácora de Deliberación (${notes.length})`}
+                {activeTab === 'audit' && 'Auditoría & Trazabilidad de Correos'}
+              </span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Quick jump select dropdown */}
+            <div className="relative">
+              <select
+                aria-label="Seleccionar pestaña de asamblea"
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as any)}
+                className="text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs"
+              >
+                <option value="overview">1. Resumen</option>
+                <option value="quorum">2. Quórum ({assembly.representedQuorum}%)</option>
+                <option value="votes">3. Votaciones ({votes.length})</option>
+                <option value="results">4. Resultados</option>
+                <option value="minutes">5. Acta & PDF</option>
+                <option value="documents">6. Documentos</option>
+                <option value="notes">7. Bitácora</option>
+                <option value="audit">8. Auditoría & Correos</option>
+              </select>
+            </div>
+
+            {/* Scroll Navigation Chevrons */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={handleTabsScrollLeft}
+                disabled={!canScrollLeft}
+                className="p-1 rounded-lg bg-white hover:bg-slate-200 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs"
+                title="Deslizar a la izquierda"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleTabsScrollRight}
+                disabled={!canScrollRight}
+                className="p-1 rounded-lg bg-white hover:bg-slate-200 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs"
+                title="Deslizar a la derecha"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable Tabs Pills Row */}
+        <div
+          ref={tabsScrollRef}
+          onScroll={checkTabsScroll}
+          className="flex overflow-x-auto gap-2 pb-1.5 scrollbar-thin scrollbar-thumb-teal-400 scrollbar-track-slate-100 items-center scroll-smooth"
+        >
+          {[
+            { id: 'overview', label: 'Resumen & Estado', badge: null, icon: <FileText className="w-4 h-4" /> },
+            { id: 'quorum', label: 'Quórum Legal', badge: `${assembly.representedQuorum}%`, icon: <Users className="w-4 h-4" /> },
+            { id: 'votes', label: 'Votaciones', badge: `${votes.length}`, icon: <VoteIcon className="w-4 h-4" /> },
+            { id: 'results', label: 'Resultados Oficiales', badge: 'Escrutinio', icon: <Award className="w-4 h-4" /> },
+            { id: 'minutes', label: 'Acta Oficial & PDF', badge: 'Ley 675', icon: <FileCheck2 className="w-4 h-4" /> },
+            { id: 'documents', label: 'Documentos', badge: `${documents.length}`, icon: <Upload className="w-4 h-4" /> },
+            { id: 'notes', label: 'Bitácora', badge: `${notes.length}`, icon: <Sparkles className="w-4 h-4" /> },
+            { id: 'audit', label: 'Auditoría & Correos', badge: emailLogs.length > 0 ? `${emailLogs.length}` : null, icon: <ShieldCheck className="w-4 h-4" /> }
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                }}
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm whitespace-nowrap transition-all border shrink-0 ${
+                  isActive
+                    ? 'bg-teal-600 text-white font-extrabold border-teal-700 shadow-md shadow-teal-700/20 ring-2 ring-teal-500/30'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-950 font-bold border-slate-200/90 shadow-2xs'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      isActive
+                        ? 'bg-white/25 text-white'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Movable Slider Bar ("Barra para mover que pueda verse mejor") */}
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3 text-[11px]">
+          <div className="flex items-center gap-1.5 text-slate-500 font-bold shrink-0">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-teal-600" />
+            <span className="hidden sm:inline">Barra para mover opciones:</span>
+            <span className="sm:hidden">Mover:</span>
+          </div>
+          <div className="flex-1 relative flex items-center">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={tabsScrollPos}
+              onChange={handleTabsSliderChange}
+              aria-label="Barra para mover y deslizar opciones de asamblea"
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-ew-resize accent-teal-600 hover:bg-slate-300 transition-colors focus:outline-none"
+            />
+          </div>
+          <div className="hidden md:flex items-center gap-2 text-[10px] text-slate-400 font-mono font-medium shrink-0">
+            <span className={activeTab === 'quorum' ? 'text-teal-700 font-bold underline' : ''}>Quórum</span>
+            <span>•</span>
+            <span className={activeTab === 'votes' ? 'text-teal-700 font-bold underline' : ''}>Votaciones</span>
+            <span>•</span>
+            <span className={activeTab === 'results' ? 'text-teal-700 font-bold underline' : ''}>Resultados</span>
+            <span>•</span>
+            <span className={activeTab === 'audit' ? 'text-teal-700 font-bold underline' : ''}>Auditoría</span>
+          </div>
+        </div>
       </div>
 
       {/* TAB 1: OVERVIEW */}
@@ -865,6 +1056,46 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                         </div>
                       )}
                     </div>
+
+                    {/* LIVE QUORUM & ATTENDANCE PROGRESS */}
+                    <div className="pt-2 border-t border-slate-200/60">
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-teal-50/80 to-emerald-50/60 border border-teal-200/70 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-extrabold text-teal-950 flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-teal-600" /> Quórum en esta Votación:
+                          </span>
+                          <span className={`font-black ${vote.quorumSnapshot?.isQuorumMet ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {vote.quorumSnapshot ? `${vote.quorumSnapshot.totalCoefficientVoted.toFixed(2)}%` : '0.00%'}
+                            {vote.quorumSnapshot?.isQuorumMet ? ' (Quórum Válido)' : ''}
+                          </span>
+                        </div>
+                        <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              vote.quorumSnapshot?.isQuorumMet ? 'bg-emerald-500' : 'bg-teal-600'
+                            }`}
+                            style={{ width: `${Math.min(vote.quorumSnapshot?.quorumPercentage || 0, 100)}%` }}
+                          />
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-slate-800 z-10"
+                            style={{ left: `${assembly?.requiredQuorum || 50.01}%` }}
+                            title="Quórum legal requerido: 50.01%"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-slate-600 pt-0.5">
+                          <span>
+                            {vote.quorumSnapshot?.totalVotersCount || 0} de {vote.quorumSnapshot?.totalEligibleCount || assembly.totalOwnersInvited} unidades votaron
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedVoteForQuorum(vote)}
+                            className="text-teal-700 hover:text-teal-900 font-extrabold underline inline-flex items-center gap-0.5"
+                          >
+                            Ver Asistencia en Vivo →
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Candidate Proposals PDF and Attachments */}
@@ -951,6 +1182,17 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                         Ver Resultados Oficiales
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedVoteForQuorum(vote)}
+                      leftIcon={<Users className="w-3.5 h-3.5 text-teal-600" />}
+                      className="border-teal-300 text-teal-800 hover:bg-teal-50 font-bold"
+                      title="Ver desglose y lista de asistencia de esta votación"
+                    >
+                      Asistencia
+                    </Button>
 
                     <Button
                       size="sm"
@@ -1044,9 +1286,23 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                     <h4 className="text-base font-bold text-slate-900">{result.voteTitle}</h4>
                     <p className="text-xs text-slate-500">{result.question}</p>
                   </div>
-                  <Badge variant={result.status === 'finished' ? 'slate' : 'emerald'}>
-                    {result.status === 'finished' ? 'VOTACIÓN CERRADA' : 'VOTACIÓN EN CURSO'}
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const found = votes.find((v) => v.id === result.voteId);
+                        if (found) setSelectedVoteForQuorum(found);
+                      }}
+                      leftIcon={<Users className="w-3.5 h-3.5 text-teal-600" />}
+                      className="text-xs border-teal-300 text-teal-800 hover:bg-teal-50 font-bold"
+                    >
+                      Asistencia ({result.voteQuorum?.quorumPercentage || ((result.totalCoefficientSum).toFixed(1))}% quórum)
+                    </Button>
+                    <Badge variant={result.status === 'finished' ? 'slate' : 'emerald'}>
+                      {result.status === 'finished' ? 'VOTACIÓN CERRADA' : 'VOTACIÓN EN CURSO'}
+                    </Badge>
+                  </div>
                 </div>
 
                 {/* Summary badges */}
@@ -1341,17 +1597,44 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
           </div>
 
           {/* Email Dispatches History with Attached PDFs */}
-          <div className="space-y-3 pt-4 border-t border-slate-200">
-            <div className="flex items-center justify-between">
+          <div className="space-y-4 pt-4 border-t border-slate-200">
+            {/* Security Notice: Admin cannot see access codes */}
+            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-start gap-3">
+              <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl shrink-0 mt-0.5">
+                <Lock className="w-4 h-4 text-emerald-700" />
+              </div>
+              <div className="space-y-1 text-xs">
+                <div className="font-bold text-emerald-950 flex flex-wrap items-center gap-2">
+                  <span>Privacidad Criptográfica de Códigos de Acceso (Habeas Data Ley 1581)</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-200/80 text-emerald-900 border border-emerald-300">
+                    Confidencial • Solo Propietario
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-900/90 leading-relaxed">
+                  Por estrictos protocolos de seguridad y protección de datos personales, <strong>el administrador no puede ver los códigos de acceso, códigos de verificación ni OTPs</strong>. Estos códigos son personales e intransferibles y se envían de forma cifrada exclusivamente al correo registrado de cada copropietario que los solicita.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                   <Mail className="w-4 h-4 text-teal-600" />
                   Historial de Correos Despachados con Archivos PDF Adjuntos ({emailLogs.length})
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Trazabilidad inmutable de actas y certificados enviados a copropietarios conforme a Ley 675.
+                  Trazabilidad inmutable de actas, certificados y citaciones enviadas a copropietarios conforme a Ley 675.
                 </p>
               </div>
+              <a
+                href={`/api/assemblies/${assemblyId}/download-results-pdf`}
+                target="_blank"
+                download={`Acta_Resultados_${assembly.title}.pdf`}
+                className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-300 text-teal-800 rounded-xl font-bold flex items-center gap-2 text-xs transition-colors self-start sm:self-auto shadow-2xs"
+              >
+                <Download className="w-3.5 h-3.5 text-teal-700" />
+                <span>Descargar PDF Oficial de Resultados</span>
+              </a>
             </div>
 
             {emailLogs.length === 0 ? (
@@ -1365,7 +1648,7 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                     <tr>
                       <th className="py-3 px-4">Fecha y Hora</th>
                       <th className="py-3 px-4">Destinatario</th>
-                      <th className="py-3 px-4">Asunto</th>
+                      <th className="py-3 px-4">Asunto & Contenido</th>
                       <th className="py-3 px-4">Archivo PDF Adjunto</th>
                       <th className="py-3 px-4">Estado</th>
                     </tr>
@@ -1380,27 +1663,41 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
                           <div>{log.recipientName}</div>
                           <div className="text-[10px] text-slate-500 font-normal font-mono">{log.recipientEmail}</div>
                         </td>
-                        <td className="py-3 px-4 text-slate-700 max-w-xs truncate">
-                          {log.subject}
+                        <td className="py-3 px-4 text-slate-700 max-w-sm">
+                          <div className="font-semibold text-slate-800">{maskAccessCodes(log.subject)}</div>
+                          {log.messageBody && (
+                            <div className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                              {maskAccessCodes(log.messageBody)}
+                            </div>
+                          )}
+                          {(log.type === 'invitacion' || log.subject.toLowerCase().includes('código') || log.subject.toLowerCase().includes('activación') || log.subject.toLowerCase().includes('recuperación')) && (
+                            <div className="mt-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-bold">
+                                <Lock className="w-3 h-3 text-amber-600" />
+                                Código de Acceso: •••••• (Confidencial - Solo visible para el propietario)
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-4">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold">
-                            <FileText className="w-3 h-3 text-teal-600" />
-                            <span className="truncate max-w-[140px] font-mono text-[10px]">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold">
+                            <FileText className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                            <span className="truncate max-w-[130px] font-mono text-[10px]">
                               {log.attachmentName || 'Acta_Resultados.pdf'}
                             </span>
                             <button
                               type="button"
-                              onClick={handleDownloadPDF}
-                              className="text-teal-700 hover:text-teal-900 ml-1"
-                              title="Descargar archivo adjunto"
+                              onClick={() => handleDownloadEmailPdf(log)}
+                              className="inline-flex items-center gap-1 text-teal-700 hover:text-teal-950 font-bold ml-1.5 px-2 py-0.5 rounded bg-teal-100 hover:bg-teal-200 transition-colors cursor-pointer"
+                              title="Descargar archivo PDF adjunto a este correo"
                             >
                               <Download className="w-3 h-3" />
+                              <span className="text-[10px]">Descargar</span>
                             </button>
                           </div>
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3" />
                             Despachado con PDF
                           </span>
@@ -1742,6 +2039,19 @@ export const AssemblyDetail: React.FC<AssemblyDetailProps> = ({
           onOpenPdfPreview={(url, title, fileName) => {
             setPdfPreviewState({ isOpen: true, url, title, fileName });
           }}
+        />
+      )}
+
+      {/* Live Vote Quorum & Attendance Modal */}
+      {selectedVoteForQuorum && (
+        <VoteQuorumModal
+          isOpen={!!selectedVoteForQuorum}
+          onClose={() => {
+            setSelectedVoteForQuorum(null);
+            loadData();
+          }}
+          vote={selectedVoteForQuorum}
+          assemblyTitle={assembly?.title}
         />
       )}
     </div>

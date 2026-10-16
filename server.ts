@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
+import { jsPDF } from 'jspdf';
 import { store } from './src/services/store';
 import { dispatchEmail, getEmailHistory, getLatestEmailFor, getEmailServiceStatus, dispatchBatchEmails, verifySmtpConnection, updateRuntimeEmailConfig, syncPersistedEmailConfig } from './server/emailService';
 import { initDb, getDbStatus, saveStateNow } from './server/db';
@@ -152,7 +153,7 @@ app.post('/api/auth/voter/request-activation', async (req, res) => {
     const dispatchRes = await dispatchEmail({
       to: result.email,
       toName: result.name,
-      subject: `Código de Activación VotoSmart: ${code}`,
+      subject: `[VotoSmart] Código de Verificación para Activación de Cuenta`,
       type: 'invitacion',
       html: emailHtml
     });
@@ -231,7 +232,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const dispatchRes = await dispatchEmail({
       to: result.email,
       toName: result.userName || 'Usuario',
-      subject: `Código de Recuperación VotoSmart: ${code}`,
+      subject: `[VotoSmart] Código de Seguridad para Restablecer Contraseña`,
       type: 'password_reset',
       html: emailHtml
     });
@@ -839,6 +840,42 @@ app.get('/api/votes/:id/eligibility', (req, res) => {
   }
 });
 
+// Quórum Específico por Votación
+app.get('/api/votes/:id/quorum', (req, res) => {
+  try {
+    const quorum = store.getVoteQuorum(req.params.id);
+    res.json(quorum);
+  } catch (error: any) {
+    res.status(404).json({ error: error.message });
+  }
+});
+
+// Asistencia en Vivo por Votación
+app.get('/api/votes/:id/attendance', (req, res) => {
+  try {
+    const attendance = store.getVoteAttendanceDetails(req.params.id);
+    res.json(attendance);
+  } catch (error: any) {
+    res.status(404).json({ error: error.message });
+  }
+});
+
+// Historial Personal de Votaciones del Usuario
+app.get('/api/assemblies/:id/user-votes-history', (req, res) => {
+  try {
+    const { userId, documentNumber, apartment } = req.query;
+    const history = store.getUserVotesParticipation(
+      req.params.id,
+      userId as string,
+      documentNumber as string,
+      apartment as string
+    );
+    res.json(history);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // 9. Notes (Bitácora de Asamblea)
 app.get('/api/assemblies/:id/notes', (req, res) => {
   res.json(store.getNotesByAssembly(req.params.id));
@@ -884,6 +921,104 @@ app.post('/api/assemblies/:id/minutes', (req, res) => {
 });
 
 // 11. Emails & Results Dispatching
+const assemblyPdfStore = new Map<string, { name: string; buffer: Buffer; contentType: string; dataUri?: string }>();
+const assemblyMinutesPdfStore = new Map<string, { name: string; buffer: Buffer; contentType: string; dataUri?: string }>();
+
+// PDF Download Routes
+app.get('/api/assemblies/:id/download-results-pdf', (req, res) => {
+  const assembly = store.getAssemblyById(req.params.id);
+  const complex = store.getComplex();
+  const defaultName = `Acta_Resultados_${assembly?.title || 'Asamblea'}.pdf`;
+
+  const cached = assemblyPdfStore.get(req.params.id);
+  if (cached) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(cached.name || defaultName)}"`);
+    res.setHeader('Content-Length', cached.buffer.length);
+    return res.end(cached.buffer);
+  }
+
+  // Check email logs for attached dataUri
+  const emailLogs = store.getEmailLogsByAssembly(req.params.id);
+  const logWithPdf = emailLogs.find((l) => l.attachmentDataUri && l.type === 'resultados');
+  if (logWithPdf?.attachmentDataUri) {
+    const b64 = logWithPdf.attachmentDataUri.includes('base64,')
+      ? logWithPdf.attachmentDataUri.split('base64,')[1]
+      : logWithPdf.attachmentDataUri;
+    const buf = Buffer.from(b64, 'base64');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(logWithPdf.attachmentName || defaultName)}"`);
+    res.setHeader('Content-Length', buf.length);
+    return res.end(buf);
+  }
+
+  // Generate lightweight valid PDF fallback
+  try {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`Certificado Oficial de Resultados y Escrutinio`, 14, 22);
+    doc.setFontSize(12);
+    doc.text(`Copropiedad: ${complex.name}`, 14, 34);
+    doc.text(`Asamblea: ${assembly?.title || 'Asamblea'}`, 14, 44);
+    doc.text(`Fecha: ${assembly?.date || new Date().toLocaleDateString('es-CO')}`, 14, 54);
+    doc.text(`Quorum Oficial Representado: ${assembly?.representedQuorum || 0}%`, 14, 64);
+    doc.text(`Documento emitido conforme a la Ley 675 de 2001 por VotoSmart Colombia`, 14, 80);
+    const pdfBuf = Buffer.from(doc.output('arraybuffer'));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(defaultName)}"`);
+    res.setHeader('Content-Length', pdfBuf.length);
+    return res.end(pdfBuf);
+  } catch (err: any) {
+    res.status(500).json({ error: 'No se pudo generar el PDF: ' + err.message });
+  }
+});
+
+app.get('/api/assemblies/:id/download-minutes-pdf', (req, res) => {
+  const assembly = store.getAssemblyById(req.params.id);
+  const complex = store.getComplex();
+  const defaultName = `Acta_Oficial_${assembly?.title || 'Asamblea'}.pdf`;
+
+  const cached = assemblyMinutesPdfStore.get(req.params.id);
+  if (cached) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(cached.name || defaultName)}"`);
+    res.setHeader('Content-Length', cached.buffer.length);
+    return res.end(cached.buffer);
+  }
+
+  // Check email logs for attached dataUri
+  const emailLogs = store.getEmailLogsByAssembly(req.params.id);
+  const logWithPdf = emailLogs.find((l) => l.attachmentDataUri && l.type === 'acta');
+  if (logWithPdf?.attachmentDataUri) {
+    const b64 = logWithPdf.attachmentDataUri.includes('base64,')
+      ? logWithPdf.attachmentDataUri.split('base64,')[1]
+      : logWithPdf.attachmentDataUri;
+    const buf = Buffer.from(b64, 'base64');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(logWithPdf.attachmentName || defaultName)}"`);
+    res.setHeader('Content-Length', buf.length);
+    return res.end(buf);
+  }
+
+  try {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`Acta Oficial Aprobada de Asamblea General`, 14, 22);
+    doc.setFontSize(12);
+    doc.text(`Copropiedad: ${complex.name}`, 14, 34);
+    doc.text(`Asamblea: ${assembly?.title || 'Asamblea'}`, 14, 44);
+    doc.text(`Fecha: ${assembly?.date || new Date().toLocaleDateString('es-CO')}`, 14, 54);
+    doc.text(`Acta radicada conforme a la Ley 675 de 2001`, 14, 70);
+    const pdfBuf = Buffer.from(doc.output('arraybuffer'));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(defaultName)}"`);
+    res.setHeader('Content-Length', pdfBuf.length);
+    return res.end(pdfBuf);
+  } catch (err: any) {
+    res.status(500).json({ error: 'No se pudo generar el acta en PDF: ' + err.message });
+  }
+});
+
 app.get('/api/assemblies/:id/emails', (req, res) => {
   res.json(store.getEmailLogsByAssembly(req.params.id));
 });
@@ -904,6 +1039,34 @@ app.post('/api/assemblies/:id/send-results', async (req, res) => {
     const votes = store.getVotesByAssembly(req.params.id);
     const complex = store.getComplex();
     const attachName = attachment?.name || result.attachment?.name || `Acta_Resultados_${assembly?.title || 'Asamblea'}.pdf`;
+    const attachSize = attachment?.size || '198 KB';
+
+    // Store in-memory buffer if dataUri was provided
+    let emailAttachments: any[] | undefined = undefined;
+    if (attachment?.dataUri) {
+      const b64 = attachment.dataUri.includes('base64,')
+        ? attachment.dataUri.split('base64,')[1]
+        : attachment.dataUri;
+      const buf = Buffer.from(b64, 'base64');
+      assemblyPdfStore.set(req.params.id, {
+        name: attachName,
+        buffer: buf,
+        contentType: 'application/pdf',
+        dataUri: attachment.dataUri
+      });
+      emailAttachments = [
+        {
+          filename: attachName,
+          content: b64,
+          contentType: 'application/pdf'
+        }
+      ];
+    }
+
+    // Public download URL for the PDF
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+    const host = req.get('host') || 'localhost:3000';
+    const downloadUrl = `${proto}://${host}/api/assemblies/${req.params.id}/download-results-pdf`;
 
     // Trigger batch email dispatching in background
     if (result.recipients && result.recipients.length > 0) {
@@ -924,14 +1087,22 @@ app.post('/api/assemblies/:id/send-results', async (req, res) => {
               <p style="margin:0; font-weight:bold; color:#0f766e;">Total votaciones computadas: ${votes.length}</p>
               <p style="margin:4px 0 0; font-size:12px; color:#64748b;">Quórum alcanzado: ${assembly?.representedQuorum || 0}%</p>
             </div>
-            <div style="margin: 16px 0; padding: 14px 18px; background: #f8fafc; border: 1.5px solid #0d9488; border-radius: 10px;">
-              <p style="margin: 0; font-weight: bold; color: #0f766e; font-size: 13px;">📎 Documento Adjunto (PDF)</p>
-              <p style="margin: 4px 0 0; font-size: 12px; color: #334155;"><strong>${attachName}</strong> • Certificado oficial conforme a Ley 675 de 2001</p>
+            <div style="margin: 22px 0; padding: 20px; background: #f0fdfa; border: 2px dashed #0d9488; border-radius: 12px; text-align: center;">
+              <p style="margin: 0 0 10px; font-weight: bold; color: #0f766e; font-size: 14px;">
+                📎 Documento Oficial Adjunto: <strong>${attachName}</strong>
+              </p>
+              <a href="${downloadUrl}" download="${attachName}" target="_blank" style="display: inline-block; background: #0f766e; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px rgba(15, 118, 110, 0.25);">
+                📥 Descargar Acta de Resultados en PDF
+              </a>
+              <p style="margin: 8px 0 0; font-size: 11px; color: #64748b;">
+                Archivo: ${attachName} (${attachSize}) • Conforme a Ley 675 de 2001
+              </p>
             </div>
             <p style="font-size:12px; color:#94a3b8; text-align:center;">Generado conforme a la Ley 675 de 2001 por VotoSmart Colombia.</p>
           </div>
         `,
-        'resultados'
+        'resultados',
+        emailAttachments
       ).catch((err) => console.warn('[BatchEmail] Warning:', err.message));
     }
 
@@ -956,6 +1127,32 @@ app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
     const assembly = store.getAssemblyById(req.params.id);
     const complex = store.getComplex();
     const attachName = attachment?.name || result.attachment?.name || `Acta_Oficial_${assembly?.title || 'Asamblea'}.pdf`;
+    const attachSize = attachment?.size || '218 KB';
+
+    let emailAttachments: any[] | undefined = undefined;
+    if (attachment?.dataUri) {
+      const b64 = attachment.dataUri.includes('base64,')
+        ? attachment.dataUri.split('base64,')[1]
+        : attachment.dataUri;
+      const buf = Buffer.from(b64, 'base64');
+      assemblyMinutesPdfStore.set(req.params.id, {
+        name: attachName,
+        buffer: buf,
+        contentType: 'application/pdf',
+        dataUri: attachment.dataUri
+      });
+      emailAttachments = [
+        {
+          filename: attachName,
+          content: b64,
+          contentType: 'application/pdf'
+        }
+      ];
+    }
+
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+    const host = req.get('host') || 'localhost:3000';
+    const downloadUrl = `${proto}://${host}/api/assemblies/${req.params.id}/download-minutes-pdf`;
 
     // Trigger batch email dispatching in background
     if (result.recipients && result.recipients.length > 0) {
@@ -972,14 +1169,22 @@ app.post('/api/assemblies/:id/send-minutes', async (req, res) => {
             <p>Estimado(a) <strong>${r.name}</strong>,</p>
             <p>Se adjunta el acta formal con el registro de decisiones aprobadas para: <strong>${assembly?.title || 'Asamblea'}</strong>.</p>
             ${messageBody ? `<div style="background:#f8fafc; padding:12px; border-left:4px solid #0f766e; margin:16px 0;">${messageBody}</div>` : ''}
-            <div style="margin: 16px 0; padding: 14px 18px; background: #f8fafc; border: 1.5px solid #0d9488; border-radius: 10px;">
-              <p style="margin: 0; font-weight: bold; color: #0f766e; font-size: 13px;">📎 Documento Adjunto (PDF)</p>
-              <p style="margin: 4px 0 0; font-size: 12px; color: #334155;"><strong>${attachName}</strong> • Acta firmada y radicada Ley 675</p>
+            <div style="margin: 22px 0; padding: 20px; background: #f0fdfa; border: 2px dashed #0d9488; border-radius: 12px; text-align: center;">
+              <p style="margin: 0 0 10px; font-weight: bold; color: #0f766e; font-size: 14px;">
+                📎 Documento Oficial Adjunto: <strong>${attachName}</strong>
+              </p>
+              <a href="${downloadUrl}" download="${attachName}" target="_blank" style="display: inline-block; background: #0f766e; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px rgba(15, 118, 110, 0.25);">
+                📥 Descargar Acta Oficial en PDF
+              </a>
+              <p style="margin: 8px 0 0; font-size: 11px; color: #64748b;">
+                Archivo: ${attachName} (${attachSize}) • Acta firmada conforme a Ley 675
+              </p>
             </div>
             <p style="font-size:12px; color:#94a3b8; text-align:center;">Generado conforme a la Ley 675 de 2001 por VotoSmart Colombia.</p>
           </div>
         `,
-        'acta'
+        'acta',
+        emailAttachments
       ).catch((err) => console.warn('[BatchEmail] Warning:', err.message));
     }
 

@@ -11,7 +11,10 @@ import {
   ResidentialComplex,
   User,
   Vote,
-  VoteResultSummary
+  VoteResultSummary,
+  VoteQuorumSummary,
+  VoteAttendanceDetails,
+  UserVoteHistoryItem
 } from '../types';
 
 const API_BASE = '/api';
@@ -561,6 +564,34 @@ export const api = {
       documentNumber: documentNumber || ''
     });
     const res = await fetch(`${API_BASE}/votes/${voteId}/eligibility?${params.toString()}`);
+    return res.json();
+  },
+
+  async getVoteQuorum(voteId: string): Promise<VoteQuorumSummary> {
+    const res = await fetch(`${API_BASE}/votes/${voteId}/quorum`);
+    if (!res.ok) throw new Error('Error al obtener quórum de la votación');
+    return res.json();
+  },
+
+  async getVoteAttendance(voteId: string): Promise<VoteAttendanceDetails> {
+    const res = await fetch(`${API_BASE}/votes/${voteId}/attendance`);
+    if (!res.ok) throw new Error('Error al obtener asistencia de la votación');
+    return res.json();
+  },
+
+  async getUserVotesHistory(
+    assemblyId: string,
+    userId: string,
+    documentNumber?: string,
+    apartment?: string
+  ): Promise<UserVoteHistoryItem[]> {
+    const params = new URLSearchParams({
+      userId,
+      documentNumber: documentNumber || '',
+      apartment: apartment || ''
+    });
+    const res = await fetch(`${API_BASE}/assemblies/${assemblyId}/user-votes-history?${params.toString()}`);
+    if (!res.ok) throw new Error('Error al obtener historial de votación del usuario');
     return res.json();
   },
 

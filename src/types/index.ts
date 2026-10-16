@@ -186,6 +186,62 @@ export interface Vote {
   attachmentPdfUrl?: string;
   attachmentPdfName?: string;
   attachmentPdfSize?: number;
+  quorumSnapshot?: VoteQuorumSummary;
+}
+
+export interface VoteQuorumSummary {
+  voteId: string;
+  assemblyId: string;
+  totalCoefficientVoted: number;
+  totalVotersCount: number;
+  totalEligibleCount: number;
+  totalEligibleCoefficient: number;
+  quorumPercentage: number;
+  attendancePercentage: number;
+  requiredQuorum: number;
+  isQuorumMet: boolean;
+  activeStatus: VoteStatus;
+  updatedAt: string;
+}
+
+export interface VoteAttendanceItem {
+  ownerId?: string;
+  name: string;
+  apartment: string;
+  building: string;
+  coefficient: number;
+  hasVoted: boolean;
+  votedAt?: string;
+  receiptCode?: string;
+  isCouncilMember?: boolean;
+  councilRole?: string;
+}
+
+export interface VoteAttendanceDetails {
+  voteId: string;
+  voteTitle: string;
+  question: string;
+  status: VoteStatus;
+  summary: VoteQuorumSummary;
+  attendees: VoteAttendanceItem[];
+  votedList: VoteAttendanceItem[];
+  pendingList: VoteAttendanceItem[];
+}
+
+export interface UserVoteHistoryItem {
+  voteId: string;
+  voteTitle: string;
+  question: string;
+  status: VoteStatus;
+  type: VoteType;
+  hasVoted: boolean;
+  votedAt?: string;
+  receiptCode?: string;
+  voterApartment?: string;
+  voterCoefficient?: number;
+  quorumPercentage: number;
+  totalVotersCount: number;
+  isQuorumMet: boolean;
 }
 
 export interface VoteRecord {
@@ -238,6 +294,7 @@ export interface VoteResultSummary {
   requiresCoefficient: boolean;
   status: VoteStatus;
   closedAt?: string;
+  voteQuorum?: VoteQuorumSummary;
 }
 
 export interface AssemblyMinutes {

@@ -31,7 +31,11 @@ import {
   Vote,
   VoteRecord,
   VoterParticipation,
-  VoteResultSummary
+  VoteResultSummary,
+  VoteQuorumSummary,
+  VoteAttendanceItem,
+  VoteAttendanceDetails,
+  UserVoteHistoryItem
 } from '../types';
 
 interface PasswordResetRequest {
@@ -1804,8 +1808,13 @@ class DataStore {
   }
 
   // Votes & Elections
-  getVotesByAssembly(assemblyId: string) {
-    return this.votes.filter((v) => v.assemblyId === assemblyId);
+  getVotesByAssembly(assemblyId: string): Vote[] {
+    return this.votes
+      .filter((v) => v.assemblyId === assemblyId)
+      .map((v) => ({
+        ...v,
+        quorumSnapshot: this.getVoteQuorum(v.id)
+      }));
   }
 
   getVotesByComplex(complexId?: string): Vote[] {
@@ -1936,6 +1945,177 @@ class DataStore {
     }
 
     return { eligible: true, owner };
+  }
+
+  // Quórum Específico por Votación (En vivo y Registrado)
+  getVoteQuorum(voteId: string): VoteQuorumSummary {
+    const vote = this.votes.find((v) => v.id === voteId);
+    if (!vote) {
+      return {
+        voteId,
+        assemblyId: '',
+        totalCoefficientVoted: 0,
+        totalVotersCount: 0,
+        totalEligibleCount: 0,
+        totalEligibleCoefficient: 100,
+        quorumPercentage: 0,
+        attendancePercentage: 0,
+        requiredQuorum: 50.01,
+        isQuorumMet: false,
+        activeStatus: 'scheduled',
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    const assembly = this.assemblies.find((a) => a.id === vote.assemblyId);
+    const eligibleOwners = this.getEligibleVotersForVote(voteId);
+    const totalEligibleCount = eligibleOwners.length > 0 ? eligibleOwners.length : 1;
+    const totalEligibleCoefficient = Number(
+      eligibleOwners.reduce((acc, o) => acc + (o.coefficient || 0), 0).toFixed(4)
+    ) || 100;
+
+    const parts = this.participations.filter((p) => p.voteId === voteId);
+    const totalVotersCount = parts.length;
+    const totalCoefficientVoted = Number(
+      parts.reduce((acc, p) => acc + (p.voterCoefficient || 0), 0).toFixed(4)
+    );
+
+    const quorumPercentage = totalEligibleCoefficient > 0
+      ? Number(((totalCoefficientVoted / totalEligibleCoefficient) * 100).toFixed(2))
+      : 0;
+
+    const attendancePercentage = totalEligibleCount > 0
+      ? Number(((totalVotersCount / totalEligibleCount) * 100).toFixed(2))
+      : 0;
+
+    const requiredQuorum = assembly?.requiredQuorum || 50.01;
+    const isQuorumMet = totalCoefficientVoted >= requiredQuorum;
+
+    const summary: VoteQuorumSummary = {
+      voteId,
+      assemblyId: vote.assemblyId,
+      totalCoefficientVoted,
+      totalVotersCount,
+      totalEligibleCount,
+      totalEligibleCoefficient,
+      quorumPercentage,
+      attendancePercentage,
+      requiredQuorum,
+      isQuorumMet,
+      activeStatus: vote.status,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Save snapshot in vote object
+    vote.quorumSnapshot = summary;
+    return summary;
+  }
+
+  // Detalle de Asistencia en Vivo por Votación (Inmuebles que votaron vs pendientes)
+  getVoteAttendanceDetails(voteId: string): VoteAttendanceDetails {
+    const vote = this.votes.find((v) => v.id === voteId);
+    if (!vote) throw new Error('Votación no encontrada');
+
+    const summary = this.getVoteQuorum(voteId);
+    const eligibleOwners = this.getEligibleVotersForVote(voteId);
+    const parts = this.participations.filter((p) => p.voteId === voteId);
+
+    const normDoc = (d?: string) => (d || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const normApto = (a?: string) => (a || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+
+    const attendees: VoteAttendanceItem[] = eligibleOwners.map((owner) => {
+      const part = parts.find((p) => {
+        if (p.voterDocument && normDoc(p.voterDocument) === normDoc(owner.documentNumber)) return true;
+        if (p.voterApartment && normApto(p.voterApartment) === normApto(`${owner.building ? owner.building + ' ' : ''}${owner.apartment}`)) return true;
+        if (p.voterApartment && normApto(p.voterApartment) === normApto(owner.apartment)) return true;
+        if (p.voterUserId && (p.voterUserId === owner.id || p.voterUserId === `user-${owner.id}`)) return true;
+        return false;
+      });
+
+      return {
+        ownerId: owner.id,
+        name: owner.name,
+        apartment: owner.apartment,
+        building: owner.building,
+        coefficient: owner.coefficient,
+        hasVoted: !!part,
+        votedAt: part?.votedAt,
+        receiptCode: part?.receiptCode,
+        isCouncilMember: !!owner.isCouncilMember,
+        councilRole: owner.councilRole
+      };
+    });
+
+    // Fallback for participations not directly mapped
+    parts.forEach((p) => {
+      const already = attendees.some((a) => a.receiptCode === p.receiptCode);
+      if (!already) {
+        attendees.push({
+          name: p.voterName,
+          apartment: p.voterApartment,
+          building: '',
+          coefficient: p.voterCoefficient,
+          hasVoted: true,
+          votedAt: p.votedAt,
+          receiptCode: p.receiptCode
+        });
+      }
+    });
+
+    const votedList = attendees.filter((a) => a.hasVoted);
+    const pendingList = attendees.filter((a) => !a.hasVoted);
+
+    return {
+      voteId,
+      voteTitle: vote.title,
+      question: vote.question,
+      status: vote.status,
+      summary,
+      attendees,
+      votedList,
+      pendingList
+    };
+  }
+
+  // Historial de en qué votaciones ejerció el voto el usuario
+  getUserVotesParticipation(
+    assemblyId: string,
+    voterUserId: string,
+    documentNumber?: string,
+    apartment?: string
+  ): UserVoteHistoryItem[] {
+    const assemblyVotes = this.votes.filter((v) => v.assemblyId === assemblyId);
+    const normDoc = (d?: string) => (d || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const normApto = (a?: string) => (a || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase().trim();
+    const targetDoc = normDoc(documentNumber);
+    const targetApto = normApto(apartment);
+
+    return assemblyVotes.map((vote) => {
+      const quorum = this.getVoteQuorum(vote.id);
+      const participation = this.participations.find((p) => {
+        if (p.voteId !== vote.id) return false;
+        if (voterUserId && voterUserId !== 'user-admin' && p.voterUserId === voterUserId) return true;
+        if (targetDoc && targetDoc !== 'na' && p.voterDocument && normDoc(p.voterDocument) === targetDoc) return true;
+        if (targetApto && p.voterApartment && normApto(p.voterApartment).includes(targetApto)) return true;
+        return false;
+      });
+
+      return {
+        voteId: vote.id,
+        voteTitle: vote.title,
+        question: vote.question,
+        status: vote.status,
+        type: vote.type,
+        hasVoted: !!participation,
+        votedAt: participation?.votedAt,
+        receiptCode: participation?.receiptCode,
+        voterApartment: participation?.voterApartment || apartment,
+        voterCoefficient: participation?.voterCoefficient,
+        quorumPercentage: quorum.quorumPercentage,
+        totalVotersCount: quorum.totalVotersCount,
+        isQuorumMet: quorum.isQuorumMet
+      };
+    });
   }
 
   createVote(data: Omit<Vote, 'id' | 'status' | 'startedAt' | 'closedAt' | 'closedBy'>) {
@@ -2219,6 +2399,17 @@ class DataStore {
       // already registered
     }
 
+    // 6. Record vote quorum snapshot
+    const voteQuorum = this.getVoteQuorum(voteId);
+    vote.quorumSnapshot = voteQuorum;
+
+    const allVotesParticipation = this.getUserVotesParticipation(
+      vote.assemblyId,
+      voterUserId,
+      effectiveDoc,
+      effectiveApto
+    );
+
     this.notifyChange();
 
     return {
@@ -2227,7 +2418,9 @@ class DataStore {
       verificationCode,
       votedAt: timestamp,
       voterApartment: effectiveApto,
-      voterCoefficient: effectiveCoefficient
+      voterCoefficient: effectiveCoefficient,
+      voteQuorum,
+      allVotesParticipation
     };
   }
 
@@ -2330,7 +2523,8 @@ class DataStore {
       optionResults: sorted,
       requiresCoefficient: vote.requiresCoefficient,
       status: vote.status,
-      closedAt: vote.closedAt
+      closedAt: vote.closedAt,
+      voteQuorum: this.getVoteQuorum(voteId)
     };
   }
 
@@ -2389,9 +2583,25 @@ class DataStore {
     return newMinutes;
   }
 
+  // Security & Privacy: Mask access codes / OTPs so administrators cannot view voter access credentials
+  maskConfidentialAccessCode(text?: string): string {
+    if (!text) return '';
+    return text
+      .replace(/(?:código|codigo|clave|otp|pin|token|acceso)[\s:=#]*(\d{4,8})/gi, (match, code) => {
+        return match.replace(code, '•••••• [CONFIDENCIAL]');
+      })
+      .replace(/\b\d{6}\b/g, '••••••');
+  }
+
   // Email logs & dispatching
   getEmailLogsByAssembly(assemblyId: string) {
-    return this.emailLogs.filter((e) => e.assemblyId === assemblyId);
+    return this.emailLogs
+      .filter((e) => e.assemblyId === assemblyId)
+      .map((e) => ({
+        ...e,
+        subject: this.maskConfidentialAccessCode(e.subject),
+        messageBody: e.messageBody ? this.maskConfidentialAccessCode(e.messageBody) : undefined
+      }));
   }
 
   sendAssemblyResultsEmails(
@@ -2574,7 +2784,7 @@ class DataStore {
       userName,
       userRole,
       action,
-      details,
+      details: this.maskConfidentialAccessCode(details),
       timestamp: new Date().toISOString(),
       ipAddress: '190.25.112.44'
     };

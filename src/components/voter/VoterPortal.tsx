@@ -3,8 +3,11 @@ import confetti from 'canvas-confetti';
 import {
   AlertCircle,
   Award,
+  BarChart2,
+  Check,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Download,
   Eye,
   FileText,
@@ -13,15 +16,18 @@ import {
   Printer,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   User,
+  Users,
   Vote as VoteIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
-import { Assembly, Candidate, Vote, VoteOption } from '../../types';
+import { Assembly, Candidate, Vote, VoteOption, VoteQuorumSummary, UserVoteHistoryItem } from '../../types';
 import { Alert, Badge, Button, Card, Modal } from '../common/UIComponents';
 import { downloadFile } from '../../utils/pdfHelper';
 import { PdfPreviewModal } from '../common/PdfPreviewModal';
+import { VoteQuorumModal } from '../assembly/VoteQuorumModal';
 
 interface VoterPortalProps {
   assemblyId?: string;
@@ -37,6 +43,8 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
   const [votes, setVotes] = useState<Vote[]>([]);
   const [votedMap, setVotedMap] = useState<Record<string, boolean>>({});
   const [eligibilityMap, setEligibilityMap] = useState<Record<string, { eligible: boolean; reason?: string }>>({});
+  const [userVotesHistory, setUserVotesHistory] = useState<UserVoteHistoryItem[]>([]);
+  const [selectedVoteForQuorum, setSelectedVoteForQuorum] = useState<Vote | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Active voting modal state
@@ -50,6 +58,8 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
     votedAt: string;
     voterApartment: string;
     voterCoefficient: number;
+    voteQuorum?: VoteQuorumSummary;
+    allVotesParticipation?: UserVoteHistoryItem[];
   } | null>(null);
 
   // Candidate detail preview modal
@@ -115,6 +125,18 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
         }
         setVotedMap(statusMap);
         setEligibilityMap(eligMap);
+
+        try {
+          const history = await api.getUserVotesHistory(
+            targetAssemblyId,
+            user.id,
+            user.documentNumber,
+            user.apartment
+          );
+          setUserVotesHistory(history);
+        } catch (e) {
+          console.error('Error fetching user votes history:', e);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -186,6 +208,13 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
       setReceiptData(res);
       setVotingStep('receipt');
       setVotedMap((prev) => ({ ...prev, [selectedVote.id]: true }));
+      if (res.allVotesParticipation) {
+        setUserVotesHistory(res.allVotesParticipation);
+      }
+      if (assembly?.id) {
+        api.getVotes(assembly.id).then(setVotes).catch(() => {});
+        api.getAssembly(assembly.id).then(setAssembly).catch(() => {});
+      }
 
       // Trigger Confetti Celebration!
       try {
@@ -264,6 +293,205 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
           >
             Volver a Mesa Directiva
           </button>
+        )}
+      </div>
+
+      {/* 1. LIVE ACTIVE VOTE QUORUM WIDGET */}
+      {(() => {
+        const activeVote = votes.find((v) => v.status === 'active') || votes[0];
+        if (!activeVote) return null;
+        const qSnap = activeVote.quorumSnapshot;
+        const quorumPct = qSnap?.quorumPercentage || 0;
+        const isMet = qSnap?.isQuorumMet || false;
+        const reqQ = qSnap?.requiredQuorum || assembly.requiredQuorum || 50.01;
+
+        return (
+          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-white via-teal-50/40 to-emerald-50/30 border-2 border-teal-500/30 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-600 text-white shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                    Quórum en Vivo de la Votación
+                  </span>
+                  <Badge variant={activeVote.status === 'active' ? 'emerald' : 'slate'} size="sm">
+                    {activeVote.status === 'active' ? 'VOTACIÓN EN CURSO' : 'ÚLTIMO REGISTRO'}
+                  </Badge>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                  {activeVote.title}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedVoteForQuorum(activeVote)}
+                className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold text-teal-800 bg-white border border-teal-300 hover:bg-teal-50 shadow-2xs transition-colors shrink-0"
+              >
+                <Users className="w-4 h-4 text-teal-600" />
+                <span>Ver Asistencia Completa →</span>
+              </button>
+            </div>
+
+            {/* Simple Graphic Bar & Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                <span className="text-[11px] font-bold uppercase text-slate-500 block">Quórum Computado</span>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-2xl font-black text-teal-900">
+                    {qSnap ? qSnap.totalCoefficientVoted.toFixed(2) : '0.00'}%
+                  </span>
+                  <span className="text-xs text-slate-500">de coeficiente</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                <span className="text-[11px] font-bold uppercase text-slate-500 block">Inmuebles Participantes</span>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-2xl font-black text-slate-900">
+                    {qSnap?.totalVotersCount || 0}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    de {qSnap?.totalEligibleCount || assembly.totalOwnersInvited} unidades
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                <span className="text-[11px] font-bold uppercase text-slate-500 block">Estatus Legal Ley 675</span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {isMet ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <Clock className="w-5 h-5 text-amber-500 shrink-0" />
+                  )}
+                  <span className={`text-xs font-extrabold ${isMet ? 'text-emerald-800' : 'text-amber-800'}`}>
+                    {isMet ? 'Mayoría Decisoria Alcanzada' : `Requiere al menos ${reqQ}%`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Simple Attendance Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="relative w-full h-3.5 bg-slate-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isMet ? 'bg-emerald-500' : 'bg-teal-600'
+                  }`}
+                  style={{ width: `${Math.min(quorumPct, 100)}%` }}
+                />
+                {/* 50.01% marker */}
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-slate-900 z-10"
+                  style={{ left: `${reqQ}%` }}
+                  title={`Quórum legal Ley 675: ${reqQ}%`}
+                />
+              </div>
+              <div className="flex justify-between text-[11px] font-semibold text-slate-600">
+                <span>0%</span>
+                <span className="text-slate-800 font-extrabold">Meta Legal: {reqQ}%</span>
+                <span>100% Coeficiente</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 2. HISTORIAL DE VOTACIÓN Y PARTICIPACIÓN ("En qué votaciones ejerció el voto") */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-white border-2 border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <VoteIcon className="w-5 h-5 text-teal-600" />
+              <h3 className="text-lg font-black text-slate-900 font-display">
+                Mis Votaciones y Participación: Inmueble {user?.apartment || 'Copropietario'}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Registro formal e inviolable de en qué votaciones ejerció su voto en esta asamblea.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="px-3 py-1 rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+              {votes.filter((v) => votedMap[v.id]).length} de {votes.length} Votos Emitidos
+            </span>
+          </div>
+        </div>
+
+        {votes.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4">No hay votaciones registradas en esta asamblea.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {votes.map((v) => {
+              const hasVoted = votedMap[v.id];
+              const historyItem = userVotesHistory.find((h) => h.voteId === v.id);
+              const isActive = v.status === 'active';
+              const isClosed = v.status === 'finished';
+              const elig = eligibilityMap[v.id] || { eligible: true };
+
+              return (
+                <div
+                  key={v.id}
+                  className={`p-3.5 rounded-2xl border transition-all ${
+                    hasVoted
+                      ? 'bg-emerald-50/30 border-emerald-300/80'
+                      : isActive && elig.eligible
+                      ? 'bg-teal-50/40 border-teal-400 ring-2 ring-teal-500/10'
+                      : 'bg-slate-50/60 border-slate-200 opacity-80'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="font-bold text-xs text-slate-900 line-clamp-1">{v.title}</span>
+                    {hasVoted ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 shrink-0">
+                        <Check className="w-3 h-3 text-emerald-600" /> VOTO EJERCIDO
+                      </span>
+                    ) : isActive ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800 shrink-0 animate-pulse">
+                        <Clock className="w-3 h-3 text-teal-600" /> PENDIENTE
+                      </span>
+                    ) : isClosed ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 shrink-0">
+                        NO PARTICIPÓ
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-400">PROGRAMADA</span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 line-clamp-2 mb-2 font-normal">
+                    {v.question}
+                  </p>
+
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500">
+                    <div>
+                      {hasVoted ? (
+                        <span className="font-mono text-emerald-700 font-bold">
+                          {historyItem?.receiptCode ? `Recibo: ${historyItem.receiptCode.slice(0, 15)}...` : 'Sufragio Certificado'}
+                        </span>
+                      ) : (
+                        <span>
+                          Quórum: <strong>{v.quorumSnapshot?.quorumPercentage || 0}%</strong>
+                        </span>
+                      )}
+                    </div>
+
+                    {!hasVoted && isActive && elig.eligible && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenVote(v)}
+                        className="text-xs font-black text-teal-700 hover:text-teal-900 underline"
+                      >
+                        Votar Ahora →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -418,6 +646,44 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                           </div>
                         </div>
                       )}
+
+                      {/* VOTE QUORUM PROGRESS INDICATOR */}
+                      <div className="pt-2 border-t border-slate-200/60 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-extrabold text-teal-950 flex items-center gap-1.5">
+                            <BarChart2 className="w-3.5 h-3.5 text-teal-600" /> Quórum en esta Votación:
+                          </span>
+                          <span className={`font-black ${vote.quorumSnapshot?.isQuorumMet ? 'text-emerald-700' : 'text-slate-700'}`}>
+                            {vote.quorumSnapshot ? `${vote.quorumSnapshot.totalCoefficientVoted.toFixed(2)}%` : '0.00%'}
+                            {vote.quorumSnapshot?.isQuorumMet ? ' (Quórum Legal Superado)' : ''}
+                          </span>
+                        </div>
+                        <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              vote.quorumSnapshot?.isQuorumMet ? 'bg-emerald-500' : 'bg-teal-600'
+                            }`}
+                            style={{ width: `${Math.min(vote.quorumSnapshot?.quorumPercentage || 0, 100)}%` }}
+                          />
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-slate-900 z-10"
+                            style={{ left: `${assembly?.requiredQuorum || 50.01}%` }}
+                            title="Quórum requerido: 50.01%"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>
+                            {vote.quorumSnapshot?.totalVotersCount || 0} de {vote.quorumSnapshot?.totalEligibleCount || assembly.totalOwnersInvited} inmuebles han votado
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedVoteForQuorum(vote)}
+                            className="text-teal-700 hover:text-teal-900 font-bold underline inline-flex items-center gap-1"
+                          >
+                            Ver Asistencia y Quórum en Vivo →
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Action Button */}
@@ -775,6 +1041,116 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                 </div>
               </div>
 
+              {/* LIVE QUORUM OF THIS VOTE POST-CAST */}
+              {receiptData.voteQuorum && (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-50 to-emerald-50 border-2 border-teal-500/40 text-left max-w-lg mx-auto space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-teal-950 uppercase flex items-center gap-1.5">
+                      <BarChart2 className="w-4 h-4 text-teal-600" /> Quórum de esta Votación
+                    </span>
+                    <Badge variant={receiptData.voteQuorum.isQuorumMet ? 'emerald' : 'amber'} size="sm">
+                      {receiptData.voteQuorum.isQuorumMet ? '✓ Quórum Legal Alcanzado' : 'En Curso'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-teal-900">
+                      {receiptData.voteQuorum.quorumPercentage}%
+                    </span>
+                    <span className="text-xs text-slate-600">
+                      ({receiptData.voteQuorum.totalCoefficientVoted.toFixed(2)}% de coeficiente registrado)
+                    </span>
+                  </div>
+
+                  {/* Visual Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="relative w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          receiptData.voteQuorum.isQuorumMet ? 'bg-emerald-500' : 'bg-teal-600'
+                        }`}
+                        style={{ width: `${Math.min(receiptData.voteQuorum.quorumPercentage, 100)}%` }}
+                      />
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-slate-900 z-10"
+                        style={{ left: `${receiptData.voteQuorum.requiredQuorum || 50.01}%` }}
+                        title="Quórum legal requerido: 50.01%"
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                      <span>0%</span>
+                      <span>Mínimo Ley 675: {receiptData.voteQuorum.requiredQuorum || 50.01}%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-teal-950 leading-relaxed font-medium">
+                    Con su voto de <strong>{receiptData.voterCoefficient}%</strong>, han participado{' '}
+                    <strong>{receiptData.voteQuorum.totalVotersCount}</strong> de{' '}
+                    <strong>{receiptData.voteQuorum.totalEligibleCount}</strong> inmuebles en esta votación.
+                  </p>
+                </div>
+              )}
+
+              {/* LIST OF ALL VOTES & EXERCISED STATUS */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left max-w-lg mx-auto space-y-2.5">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
+                    <VoteIcon className="w-4 h-4 text-teal-600" /> Votaciones de la Asamblea
+                  </span>
+                  <span className="text-[11px] font-bold text-teal-800">
+                    {votes.filter((v) => votedMap[v.id] || v.id === selectedVote?.id).length} de {votes.length} Votos Ejercidos
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {votes.map((v) => {
+                    const isCurrent = v.id === selectedVote?.id;
+                    const hasVoted = isCurrent || votedMap[v.id];
+                    const isActive = v.status === 'active';
+
+                    return (
+                      <div
+                        key={v.id}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                          hasVoted
+                            ? 'bg-emerald-50/40 border-emerald-200'
+                            : isActive
+                            ? 'bg-teal-50 border-teal-300'
+                            : 'bg-slate-50 border-slate-200 opacity-70'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800 truncate">{v.title}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{v.question}</p>
+                        </div>
+
+                        <div className="shrink-0">
+                          {hasVoted ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                              <Check className="w-3 h-3 text-emerald-600" /> Voto Ejercido
+                            </span>
+                          ) : isActive ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800 animate-pulse">
+                              <Clock className="w-3 h-3 text-teal-600" /> Pendiente
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-400">Finalizada</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {votes.some((v) => v.status === 'active' && !votedMap[v.id] && v.id !== selectedVote?.id) && (
+                  <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Aviso: Aún tiene votaciones abiertas en las que no ha ejercido su voto.</span>
+                  </div>
+                )}
+              </div>
+
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Button
                   size="md"
@@ -896,6 +1272,16 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
         pdfUrl={pdfModalState.url}
         fileName={pdfModalState.fileName}
       />
+
+      {/* VOTE QUORUM AND LIVE ATTENDANCE MODAL */}
+      {selectedVoteForQuorum && (
+        <VoteQuorumModal
+          isOpen={!!selectedVoteForQuorum}
+          onClose={() => setSelectedVoteForQuorum(null)}
+          vote={selectedVoteForQuorum}
+          assemblyTitle={assembly?.title}
+        />
+      )}
     </div>
   );
 };

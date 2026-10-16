@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Owner, QuorumAttendance, VoteResultSummary } from '../types';
+import { Owner, QuorumAttendance, VoteResultSummary, VoteAttendanceDetails } from '../types';
 
 // Export Owners to Excel
 export const exportOwnersToExcel = (owners: Owner[], complexName: string) => {
@@ -130,4 +130,49 @@ export const parseOwnersExcel = async (file: File): Promise<Omit<Owner, 'id' | '
     reader.onerror = () => reject(new Error('Error de lectura del archivo'));
     reader.readAsArrayBuffer(file);
   });
+};
+
+// Export Vote Attendance & Quorum Details to Excel
+export const exportVoteAttendanceToExcel = (details: VoteAttendanceDetails, assemblyTitle: string) => {
+  const data = details.attendees.map((item) => ({
+    'Inmueble': `${item.building ? item.building + ' - ' : ''}${item.apartment}`,
+    'Copropietario': item.name,
+    'Coeficiente (%)': item.coefficient,
+    'Estado en esta Votación': item.hasVoted ? 'VOTO EJERCIDO' : 'PENDIENTE',
+    'Hora de Sufragio': item.votedAt ? new Date(item.votedAt).toLocaleString() : '—',
+    'Código Comprobante': item.receiptCode || '—',
+    'Consejo de Administración': item.isCouncilMember ? item.councilRole || 'Sí' : 'No'
+  }));
+
+  // Add Summary Header Row
+  const summaryRows = [
+    {
+      'Inmueble': 'RESUMEN DE QUÓRUM',
+      'Copropietario': `Votación: ${details.voteTitle}`,
+      'Coeficiente (%)': details.summary.totalCoefficientVoted,
+      'Estado en esta Votación': `Quórum: ${details.summary.quorumPercentage}%`,
+      'Hora de Sufragio': details.summary.isQuorumMet ? 'QUÓRUM ALCANZADO' : 'QUÓRUM PENDIENTE',
+      'Código Comprobante': `${details.summary.totalVotersCount} de ${details.summary.totalEligibleCount} votaron`,
+      'Consejo de Administración': ''
+    },
+    ...data
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(summaryRows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Asistencia Votacion');
+
+  const colWidths = [
+    { wch: 18 },
+    { wch: 28 },
+    { wch: 16 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 28 },
+    { wch: 24 }
+  ];
+  worksheet['!cols'] = colWidths;
+
+  const safeTitle = details.voteTitle.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 25);
+  XLSX.writeFile(workbook, `Asistencia_Votacion_${safeTitle}.xlsx`);
 };
